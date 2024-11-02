@@ -36,6 +36,7 @@ export class VideoChat implements IVideoChat {
       video: true
     })
     const { audio, video } =
+      // @ts-ignore
       await SkyWayStreamFactory.createMicrophoneAudioAndCameraStream(stream)
     this.stream = new Stream(audio, video)
     video.attach(this.templeElement.localVideo)
@@ -59,6 +60,12 @@ export class VideoChat implements IVideoChat {
 
   private createSubscribeAndAttach(me: LocalP2PRoomMember, publication: any) {
     if (publication.publisher.id === me.id) return
+
+    if (!this.templeElement.subscribeButton) { // ボタンがまだ存在しない場合のみ作成
+      this.templeElement.subscribeButton = document.createElement("button");
+      this.templeElement.buttonArea.appendChild(this.templeElement.subscribeButton);
+    }
+
     this.templeElement.subscribeButton.textContent = `${publication.publisher.id}: ${publication.contentType}`
     this.templeElement.buttonArea.appendChild(
       this.templeElement.subscribeButton
@@ -68,6 +75,7 @@ export class VideoChat implements IVideoChat {
       const { stream } = await me.subscribe(publication.id)
 
       let newMedia
+      // @ts-ignore
       switch (stream.track.kind) {
         case "video":
           newMedia = document.createElement("video")
@@ -82,6 +90,7 @@ export class VideoChat implements IVideoChat {
         default:
           return
       }
+      // @ts-ignore
       stream.attach(newMedia)
       this.templeElement.remoteMediaArea.appendChild(newMedia)
     }
@@ -121,6 +130,7 @@ window.addEventListener("load", async () => {
   joinButton?.addEventListener(
     "click",
     async () => {
+      console.log("join")
       await videoChat.joinRoom()
     },
     false

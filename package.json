@@ -12,15 +12,15 @@
     "test:ui": "vitest --ui"
   },
   "devDependencies": {
-    "@vitest/ui": "^0.32.2",
-    "typescript": "^5.1.3",
-    "vite": "^4.3.9",
-    "vitest": "^0.32.2"
+    "@vitest/ui": "^0.32.4",
+    "typescript": "^5.6.3",
+    "vite": "^4.5.5",
+    "vitest": "^0.32.4"
   },
   "dependencies": {
-    "@skyway-sdk/core": "^1.4.0",
-    "@skyway-sdk/room": "^1.4.0",
-    "@skyway-sdk/sfu-bot": "^1.4.0",
-    "@skyway-sdk/token": "^1.2.4"
+    "@skyway-sdk/core": "^1.10.0",
+    "@skyway-sdk/room": "^1.10.0",
+    "@skyway-sdk/sfu-bot": "^1.10.0",
+    "@skyway-sdk/token": "^1.6.3"
   }
 }
