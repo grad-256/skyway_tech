@@ -1,4 +1,4 @@
-import { SkyWayContext, SkyWayRoom } from "@skyway-sdk/room"
+import { RemoteDataStream, SkyWayContext, SkyWayRoom } from "@skyway-sdk/room"
 import { Room } from "../domain/entities/Room"
 import { Stream } from "../domain/entities/Stream"
 import { TempleElement } from "../infrastructure/TempleElement"
@@ -51,71 +51,93 @@ export class VideoChat {
     if (!this.room) return;
 
     // メンバー参加イベント
-    this.room.events.onMemberJoined.add(({ member }) => {
-      console.log("メンバーが参加しました:", member.id);
+    this.room.events.onMemberJoined?.add((event) => {
+      console.log("メンバーが参加しました:", event.member.id);
     });
 
     // メンバー退出イベント
-    this.room.events.onMemberLeft.add(({ member }) => {
-      console.log("メンバーが退出しました:", member.id);
+    this.room.events.onMemberLeft?.add((event) => {
+      console.log("メンバーが退出しました:", event.member.id);
       const mediaElements = document.querySelectorAll(
-        `[data-member-id="${member.id}"]`
+        `[data-member-id="${event.member.id}"]`
       );
       mediaElements.forEach(element => element.remove());
     });
 
     // ストリーム公開イベント
-    this.room.events.onStreamPublished.add(async ({ publication }) => {
+    this.room.events.onStreamPublished?.add(async (event) => {
       console.log("新しいストリームが公開されました:", {
-        publicationId: publication.id,
-        publisherId: publication.publisher.id,
-        contentType: publication.contentType
+        publicationId: event.publication.id,
+        publisherId: event.publication.publisher.id,
+        contentType: event.publication.contentType
       });
-      await this.handleNewPublication(publication);
+      await this.handleNewPublication(event.publication);
     });
 
     // ストリーム公開停止イベント
-    this.room.events.onStreamUnpublished.add(({ publication }) => {
-      console.log("ストリームの公開が停止されました:", publication.id);
+    this.room.events.onStreamUnpublished?.add((event) => {
+      console.log("ストリームの公開が停止されました:", event.publication.id);
       const mediaElement = document.querySelector(
-        `[data-publication-id="${publication.id}"]`
+        `[data-publication-id="${event.publication.id}"]`
       );
       if (mediaElement) {
         mediaElement.remove();
+      }
+    });
+
+    this.room.events.onPublicationSubscribed?.add((event) => {
+      console.log("パブリケーション購読イベント:", event);
+      try {
+        // const { data, subscription } = event;
+        // console.log("メッセージを受信:", data);
+        // const senderName = subscription.publication.publisher.name || '匿名';
+        this.appendMessage('匿名', 'メッセージ受信');
+      } catch (error) {
+        console.error('メッセージ受信エラー:', error);
+      }
+    });
+
+    // メッセージ受信イベントの設定
+    this.room.onDataReceived((event) => {
+      try {
+        const { data, subscription } = event;
+        console.log("メッセージを受信:", data);
+        const senderName = subscription.publication.publisher.name || '匿名';
+        this.appendMessage(senderName, data as string);
+      } catch (error) {
+        console.error('メッセージ受信エラー:', error);
       }
     });
   }
 
   private async handleNewPublication(publication: any) {
     try {
-      const localMemberId = this.room?.getLocalMember()?.id;
-      const publisherId = publication.publisher.id;
+      const localMemberId = this.room?.getLocalMember()?.id
+      const publisherId = publication.publisher.id
       
-      console.log("デバッグ情報:", {
-        localMemberId,
-        publisherId,
-        isLocalPublication: publisherId === localMemberId,
-        contentType: publication.contentType
-      });
+      // データストリームは無視（Room クラスで処理される）
+      if (publication.contentType === 'data') {
+        return
+      }
 
       // 自分の公開したストリームは購読しない
       if (publisherId === localMemberId) {
-        console.log("自分のストリームなのでスキップします");
-        return;
+        console.log("自分のストリームなのでスキップします")
+        return
       }
 
-      console.log("ストリームを購読します:", {
+      console.log("メディアストリームを購読します:", {
         publicationId: publication.id,
         publisherId: publication.publisher.id,
         contentType: publication.contentType
-      });
+      })
 
-      const subscription = await this.room?.subscribeStream(publication.id);
+      const subscription = await this.room?.subscribeStream(publication.id)
       if (subscription) {
-        await this.attachStreamToUI(subscription.stream, publication);
+        await this.attachStreamToUI(subscription.stream, publication)
       }
     } catch (error) {
-      console.error("ストリーム購読エラー:", error);
+      console.error("ストリーム購読エラー:", error)
     }
   }
 
@@ -200,6 +222,10 @@ export class VideoChat {
       const localMember = await this.room?.join();
       if (!localMember) throw new Error("参加に失敗しました");
 
+      // メッセージング機能の初期化
+      console.log("メッセージング機能を初期化します");
+      await this.room?.initializeMessaging();
+
       // 自分のIDを表示
       this.templeElement.myId.textContent = localMember.id;
 
@@ -242,5 +268,50 @@ export class VideoChat {
       this.templeElement.myId.textContent = ""
     }
     // その他のUI要素のクリーンアップ
+  }
+
+  // メッセージ表示関数
+  private appendMessage(sender: string, content: string) {
+    const messageArea = document.getElementById('message-area');
+    if (!messageArea) return;
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message';
+    
+    const time = new Date().toLocaleTimeString();
+    messageDiv.innerHTML = `
+      <span class="sender">${this.escapeHtml(sender)}</span>
+      <span class="time">${time}</span>
+      <div class="content">${this.escapeHtml(content)}</div>
+    `;
+    
+    messageArea.appendChild(messageDiv);
+    messageArea.scrollTop = messageArea.scrollHeight;
+  }
+
+  // XSS対策用のエスケープ関数
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // メッセージ送信メソッドを追加
+  async sendMessage(message: string) {
+    if (!this.room) throw new Error("ルームに参加していません");
+    
+    try {
+      await this.room.sendMessage(message);
+      // 自分のメッセージも表示
+      const localMember = this.room.getLocalMember();
+      const senderName = localMember?.name || '自分';
+      this.appendMessage(senderName, message);
+    } catch (error) {
+      console.error("メッセージ送信エラー:", error);
+      throw error;
+    }
   }
 }

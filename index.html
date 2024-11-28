@@ -11,6 +11,14 @@
       <div>受信バイト: <span id="bytes-received">0</span> bytes</div>
       <div>RTT: <span id="rtt">0</span> ms</div>
     </div>
+        <!-- チャット機能追加 -->
+    <div id="chat-container">
+      <div id="message-area"></div>
+      <form id="message-form">
+        <input type="text" id="message-input" placeholder="メッセージを入力..." />
+        <button type="submit">送信</button>
+      </form>
+    </div>
     <p>ID: <span id="my-id"></span></p>
     <button id="leave">退室する</button>
     <div>
