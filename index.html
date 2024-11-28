@@ -2,15 +2,22 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <title></title>
+    <title>SkyWay Video Chat</title>
   </head>
   <body>
+    <div id="connection-status">
+      <div>接続状態: <span id="connection-state">-</span></div>
+      <div>送信バイト: <span id="bytes-sent">0</span> bytes</div>
+      <div>受信バイト: <span id="bytes-received">0</span> bytes</div>
+      <div>RTT: <span id="rtt">0</span> ms</div>
+    </div>
     <p>ID: <span id="my-id"></span></p>
+    <button id="leave">退室する</button>
     <div>
       room name: <input id="room-name" type="text" />
       <button id="join">join</button>
     </div>
-    <video id="local-video" width="400px" muted playsinline></video>
+    <video id="local-video" width="400px" autoplay playsinline></video>
     <div id="button-area"></div>
     <div id="remote-media-area"></div>
     <script type="module" src="/src/main.ts"></script>

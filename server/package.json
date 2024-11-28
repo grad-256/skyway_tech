@@ -2,14 +2,8 @@
   "name": "skyway_tech",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "start": "node ./server.js"
   },
   "devDependencies": {
     "@vitest/ui": "^0.32.4",
@@ -22,8 +16,10 @@
     "@skyway-sdk/room": "^1.10.0",
     "@skyway-sdk/sfu-bot": "^1.10.0",
     "@skyway-sdk/token": "^1.6.3",
+    "cors": "^2.8.5",
     "cros": "^1.0.1",
     "crypto": "^1.0.1",
+    "dotenv": "^16.4.5",
     "express": "^4.21.1"
   }
 }
