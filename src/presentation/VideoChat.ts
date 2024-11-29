@@ -1,4 +1,4 @@
-import { RemoteDataStream, SkyWayContext, SkyWayRoom } from "@skyway-sdk/room"
+import { SkyWayContext, SkyWayRoom } from "@skyway-sdk/room"
 import { Room } from "../domain/entities/Room"
 import { Stream } from "../domain/entities/Stream"
 import { TempleElement } from "../infrastructure/TempleElement"
@@ -71,6 +71,8 @@ export class VideoChat {
         publisherId: event.publication.publisher.id,
         contentType: event.publication.contentType
       });
+      console.log(event.publication);
+      
       await this.handleNewPublication(event.publication);
     });
 
@@ -88,10 +90,10 @@ export class VideoChat {
     this.room.events.onPublicationSubscribed?.add((event) => {
       console.log("パブリケーション購読イベント:", event);
       try {
-        // const { data, subscription } = event;
-        // console.log("メッセージを受信:", data);
-        // const senderName = subscription.publication.publisher.name || '匿名';
-        this.appendMessage('匿名', 'メッセージ受信');
+        const { data, subscription } = event;
+        console.log("メッセージを受信:", data);
+        const senderName = subscription.publication.publisher.name || '匿名';
+        this.appendMessage(senderName, data as string);
       } catch (error) {
         console.error('メッセージ受信エラー:', error);
       }
@@ -165,53 +167,53 @@ export class VideoChat {
     return element
   }
 
-  private setupConnectionMonitoring() {
-    if (!this.room) return
+  // private setupConnectionMonitoring() {
+  //   if (!this.room) return
 
-    // 接続状態の監視
-    this.room.onConnectionStateChanged((state: string) => {
-      this.templeElement.connectionState.textContent = state
-    })
+  //   // 接続状態の監視
+  //   this.room.onConnectionStateChanged((state: string) => {
+  //     this.templeElement.connectionState.textContent = state
+  //   })
 
-    // 定期的な統計情報の更新
-    // setInterval(async () => {
-    //   if (!this.room) return;
+  //   // 定期的な統計情報の更新
+  //   // setInterval(async () => {
+  //   //   if (!this.room) return;
 
-    //   try {
-    //     const stats = await this.room.getStats();
-    //     console.log({stats});
+  //   //   try {
+  //   //     const stats = await this.room.getStats();
+  //   //     console.log({stats});
 
-    //     if (!stats) return;
+  //   //     if (!stats) return;
 
-    //     // 送受信バイト数の更新
-    //     let totalBytesSent = 0;
-    //     let totalBytesReceived = 0;
-    //     let avgRtt = 0;
-    //     let rttCount = 0;
+  //   //     // 送受信バイト数の更新
+  //   //     let totalBytesSent = 0;
+  //   //     let totalBytesReceived = 0;
+  //   //     let avgRtt = 0;
+  //   //     let rttCount = 0;
 
-    //     stats.forEach(stat => {
-    //       if (stat.type === 'candidate-pair') {
-    //         totalBytesSent += stat.bytesSent || 0;
-    //         totalBytesReceived += stat.bytesReceived || 0;
-    //         if (stat.currentRoundTripTime) {
-    //           avgRtt += stat.currentRoundTripTime * 1000;
-    //           rttCount++;
-    //         }
-    //       }
-    //     });
+  //   //     stats.forEach(stat => {
+  //   //       if (stat.type === 'candidate-pair') {
+  //   //         totalBytesSent += stat.bytesSent || 0;
+  //   //         totalBytesReceived += stat.bytesReceived || 0;
+  //   //         if (stat.currentRoundTripTime) {
+  //   //           avgRtt += stat.currentRoundTripTime * 1000;
+  //   //           rttCount++;
+  //   //         }
+  //   //       }
+  //   //     });
 
-    //     // UI更新
-    //     this.templeElement.bytesSent.textContent = totalBytesSent.toString();
-    //     this.templeElement.bytesReceived.textContent = totalBytesReceived.toString();
-    //     this.templeElement.rtt.textContent = rttCount > 0
-    //       ? Math.round(avgRtt / rttCount).toString()
-    //       : '0';
+  //   //     // UI更新
+  //   //     this.templeElement.bytesSent.textContent = totalBytesSent.toString();
+  //   //     this.templeElement.bytesReceived.textContent = totalBytesReceived.toString();
+  //   //     this.templeElement.rtt.textContent = rttCount > 0
+  //   //       ? Math.round(avgRtt / rttCount).toString()
+  //   //       : '0';
 
-    //   } catch (error) {
-    //     console.error('統計情報の取得に失敗:', error);
-    //   }
-    // }, 1000);
-  }
+  //   //   } catch (error) {
+  //   //     console.error('統計情報の取得に失敗:', error);
+  //   //   }
+  //   // }, 1000);
+  // }
 
   async joinRoom() {
     if (!this.room) {

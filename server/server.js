@@ -26,8 +26,8 @@ app.get("/generate-token", (req, res) => {
           actions: ["read", "write", "manage", "create"],
           channels: [
             {
-              id: "test", // 任意のチャンネルアクセスを許可
-              name: "test",
+              id: '*',
+              name: '*',
               actions: ["read", "write", "manage", "create"],
               members: [
                 {
