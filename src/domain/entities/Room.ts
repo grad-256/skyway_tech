@@ -1,20 +1,28 @@
 import {
   P2PRoom,
   LocalP2PRoomMember,
-  Publication,
   LocalStream,
   LocalDataStream,
   RemoteDataStream,
-  RoomSubscription
+  RoomSubscription,
+  RemoteStream,
+  StreamPublishedEvent
 } from "@skyway-sdk/room"
 
 export class Room {
   private localMember: LocalP2PRoomMember | null = null
   private messageStream: LocalDataStream | null = null
-  private subscriptions: Map<string, RoomSubscription> = new Map()
-  private messageCallbacks: Set<(data: any) => void> = new Set()
+  private subscriptions: Map<string, {
+    subscription: RoomSubscription<RemoteStream>
+    stream: RemoteStream
+  }> = new Map()
+  private messageCallbacks: Set<(event: MessageEvent) => void> = new Set()
 
   constructor(private skyWayRoom: P2PRoom) {}
+
+  onMessageReceived(callback: (event: MessageEvent) => void) {
+    this.messageCallbacks.add(callback);
+  }
 
   async initializeMessaging() {
     if (!this.localMember) throw new Error("メンバーが参加していません")
@@ -36,7 +44,7 @@ export class Room {
       const publications = this.getRemotePublications()
       console.log("既存のパブリケーション:", publications.length)
 
-      // 既存のデータストリームを購読
+      // 既存データストリームを購読
       for (const pub of publications) {
         if (pub.contentType === 'data' && 
             pub.publisher.id !== this.localMember.id) {
@@ -44,8 +52,6 @@ export class Room {
           await this.trySubscribeToMessages(pub.id)
         }
       }
-
-      this.isInitialized = true
     } catch (error) {
       console.error("メッセージング初期化エラー:", error)
       throw error
@@ -53,16 +59,39 @@ export class Room {
   }
 
   private async trySubscribeToMessages(publicationId: string) {
-    if (this.subscriptions.has(publicationId)) {
-      console.log("既に購読済み:", publicationId)
-      return
-    }
+    if (this.subscriptions.has(publicationId)) return
 
     try {
       const subscription = await this.localMember!.subscribe(publicationId)
       if (subscription.stream instanceof RemoteDataStream) {
         this.subscriptions.set(publicationId, subscription)
-        console.log("購読成功:", publicationId)
+        
+        subscription.stream.onData.add((data) => {
+          try {
+            console.log("データストリームからメッセージを受信:", data)
+            
+            const senderId = 'unknown'
+            const senderName = '匿名'
+
+            const messageEvent: MessageEvent = {
+              data,
+              sender: {
+                id: senderId,
+                name: senderName
+              }
+            }
+            
+            this.messageCallbacks.forEach(cb => {
+              try {
+                cb(messageEvent)
+              } catch (error) {
+                console.error("メッセージコールバックエラー:", error)
+              }
+            })
+          } catch (error) {
+            console.error("メッセージ処理エラー:", error)
+          }
+        })
       }
     } catch (error) {
       console.warn("購読試行エラー:", publicationId, error)
@@ -81,7 +110,7 @@ export class Room {
       onMemberJoined: this.skyWayRoom.onMemberJoined,
       onMemberLeft: this.skyWayRoom.onMemberLeft,
       onStreamPublished: {
-        add: (callback: (event: { publication: Publication }) => void) => {
+        add: (callback: (event: StreamPublishedEvent) => void) => {
           this.skyWayRoom.onStreamPublished.add(async (event) => {
             const publication = event.publication
             if (publication.contentType === 'data' && 
@@ -100,11 +129,19 @@ export class Room {
             const { subscription } = event
             if (subscription.stream instanceof RemoteDataStream) {
               subscription.stream.onData.add((data) => {
-                this.messageCallbacks.forEach(cb => cb({
-                  data,
-                  subscription,
-                  publisher: subscription.publication.publisher
-                }))
+                try {
+                  const messageEvent = {
+                    data,
+                    subscription,
+                    sender: {
+                      id: subscription.publication.publisher.id,
+                      name: subscription.publication.publisher.name || '匿名'
+                    }
+                  }
+                  this.messageCallbacks.forEach(cb => cb(messageEvent))
+                } catch (error) {
+                  console.error("メッセージ処理エラー:", error)
+                }
               })
             }
             callback(event)
@@ -112,24 +149,6 @@ export class Room {
         }
       }
     }
-  }
-
-  // メッセージ受信コールバックの登録
-  onDataReceived(callback: (data: any) => void) {
-    this.messageCallbacks.add(callback)
-    
-    // 既存の購読済みデータストリームにもコールバックを設定
-    this.subscriptions.forEach(subscription => {
-      if (subscription.stream instanceof RemoteDataStream) {
-        subscription.stream.onData.add((data) => {
-          callback({
-            data,
-            subscription,
-            publisher: subscription.publication.publisher
-          })
-        })
-      }
-    })
   }
 
   async subscribeToMessages(publicationId: string) {
@@ -201,4 +220,13 @@ export class Room {
       this.localMember = null
     }
   }
+}
+
+// メッセージ受信イベントの型定義を追加
+interface MessageEvent {
+  data: any;
+  sender: {
+    id: string;
+    name: string;
+  };
 }

@@ -1,4 +1,4 @@
-import { SkyWayContext, SkyWayRoom } from "@skyway-sdk/room"
+import { RemoteDataStream, SkyWayContext, SkyWayRoom } from "@skyway-sdk/room"
 import { Room } from "../domain/entities/Room"
 import { Stream } from "../domain/entities/Stream"
 import { TempleElement } from "../infrastructure/TempleElement"
@@ -29,7 +29,7 @@ export class VideoChat {
     // ルーム名のバリデーション
     const roomNamePattern = /^[.A-Za-z0-9%*_-]+$/
     if (!roomNamePattern.test(roomName)) {
-      throw new Error("ルーム名には半角英数字と一部の記号（.%*_-）のみ使用できます")
+      throw new Error("ルーム名には半角英数字と一の記号（.%*_-）のみ使用できます")
     }
 
     try {
@@ -71,7 +71,6 @@ export class VideoChat {
         publisherId: event.publication.publisher.id,
         contentType: event.publication.contentType
       });
-      console.log(event.publication);
       
       await this.handleNewPublication(event.publication);
     });
@@ -87,27 +86,19 @@ export class VideoChat {
       }
     });
 
+    // メッセージ受信イベント
     this.room.events.onPublicationSubscribed?.add((event) => {
-      console.log("パブリケーション購読イベント:", event);
-      try {
-        const { data, subscription } = event;
-        console.log("メッセージを受信:", data);
-        const senderName = subscription.publication.publisher.name || '匿名';
-        this.appendMessage(senderName, data as string);
-      } catch (error) {
-        console.error('メッセージ受信エラー:', error);
-      }
-    });
-
-    // メッセージ受信イベントの設定
-    this.room.onDataReceived((event) => {
-      try {
-        const { data, subscription } = event;
-        console.log("メッセージを受信:", data);
-        const senderName = subscription.publication.publisher.name || '匿名';
-        this.appendMessage(senderName, data as string);
-      } catch (error) {
-        console.error('メッセージ受信エラー:', error);
+      const { subscription } = event;
+      if (subscription.stream instanceof RemoteDataStream) {
+        subscription.stream.onData.add((data: unknown) => {
+          try {
+            console.log("メッセージを受信:", data);
+            const senderName = subscription.publication.publisher.name || '匿名';
+            this.appendMessage(senderName, data as string);
+          } catch (error) {
+            console.error('メッセージ受信エラー:', error);
+          }
+        });
       }
     });
   }
@@ -159,61 +150,14 @@ export class VideoChat {
         ? document.createElement("video")
         : document.createElement("audio")
 
-    element.playsInline = true
     element.autoplay = true
-    if (stream.track.kind === "audio") {
+    if (stream.track.kind === "video") {
+      (element as HTMLVideoElement).playsInline = true
+    } else {
       element.controls = true
     }
     return element
   }
-
-  // private setupConnectionMonitoring() {
-  //   if (!this.room) return
-
-  //   // 接続状態の監視
-  //   this.room.onConnectionStateChanged((state: string) => {
-  //     this.templeElement.connectionState.textContent = state
-  //   })
-
-  //   // 定期的な統計情報の更新
-  //   // setInterval(async () => {
-  //   //   if (!this.room) return;
-
-  //   //   try {
-  //   //     const stats = await this.room.getStats();
-  //   //     console.log({stats});
-
-  //   //     if (!stats) return;
-
-  //   //     // 送受信バイト数の更新
-  //   //     let totalBytesSent = 0;
-  //   //     let totalBytesReceived = 0;
-  //   //     let avgRtt = 0;
-  //   //     let rttCount = 0;
-
-  //   //     stats.forEach(stat => {
-  //   //       if (stat.type === 'candidate-pair') {
-  //   //         totalBytesSent += stat.bytesSent || 0;
-  //   //         totalBytesReceived += stat.bytesReceived || 0;
-  //   //         if (stat.currentRoundTripTime) {
-  //   //           avgRtt += stat.currentRoundTripTime * 1000;
-  //   //           rttCount++;
-  //   //         }
-  //   //       }
-  //   //     });
-
-  //   //     // UI更新
-  //   //     this.templeElement.bytesSent.textContent = totalBytesSent.toString();
-  //   //     this.templeElement.bytesReceived.textContent = totalBytesReceived.toString();
-  //   //     this.templeElement.rtt.textContent = rttCount > 0
-  //   //       ? Math.round(avgRtt / rttCount).toString()
-  //   //       : '0';
-
-  //   //   } catch (error) {
-  //   //     console.error('統計情報の取得に失敗:', error);
-  //   //   }
-  //   // }, 1000);
-  // }
 
   async joinRoom() {
     if (!this.room) {
@@ -223,6 +167,17 @@ export class VideoChat {
     try {
       const localMember = await this.room?.join();
       if (!localMember) throw new Error("参加に失敗しました");
+
+      // メッセージ受信コールバックを設定
+      this.room?.onMessageReceived((event) => {
+        try {
+          const { data, sender } = event;
+          console.log("メッセージを受信:", data, "送信者:", sender);
+          this.appendMessage(sender.name, data as string);
+        } catch (error) {
+          console.error('メッセージ受信エラー:', error);
+        }
+      });
 
       // メッセージング機能の初期化
       console.log("メッセージング機能を初期化します");

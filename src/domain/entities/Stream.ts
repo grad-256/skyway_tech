@@ -15,9 +15,14 @@ export class Stream {
       });
 
       // SkyWayのストリームを作成
-      const { audio, video } = await SkyWayStreamFactory.createMicrophoneAudioAndCameraStream(
-        mediaStream
-      );
+      const { audio, video } = await SkyWayStreamFactory.createMicrophoneAudioAndCameraStream({
+        video: {
+          deviceId: mediaStream.getVideoTracks()[0].getSettings().deviceId
+        },
+        audio: {
+          deviceId: mediaStream.getAudioTracks()[0].getSettings().deviceId
+        }
+      });
 
       this._audioStream = audio;
       this._videoStream = video;
