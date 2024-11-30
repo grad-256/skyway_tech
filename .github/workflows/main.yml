@@ -1,0 +1,96 @@
+# name: main
+
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
+
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: true
+
+# jobs:
+#   lint-and-test:
+#     runs-on: ubuntu-latest
+#     env:
+#       SKYWAY_API_KEY: ${{ secrets.SKYWAY_API_KEY }}
+#       SKYWAY_SECRET_KEY: ${{ secrets.SKYWAY_SECRET_KEY }}
+#       NODE_ENV: test
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install pnpm
+#         uses: pnpm/action-setup@v3
+#         with:
+#           version: 8
+#           run_install: false
+
+#       - name: Get pnpm store directory
+#         shell: bash
+#         run: |
+#           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+#       - name: Setup pnpm cache
+#         uses: actions/cache@v4
+#         with:
+#           path: ${{ env.STORE_PATH }}
+#           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+#           restore-keys: |
+#             ${{ runner.os }}-pnpm-store-
+
+#       - name: Install dependencies
+#         run: pnpm install --frozen-lockfile
+
+#       - name: Type check
+#         run: pnpm tsc --noEmit
+
+#       - name: Run tests
+#         run: pnpm test
+
+#   deploy:
+#     needs: lint-and-test
+#     if: github.ref == 'refs/heads/main'
+#     runs-on: ubuntu-latest
+#     environment: production
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+
+#       - name: Install pnpm
+#         uses: pnpm/action-setup@v3
+#         with:
+#           version: 8
+#           run_install: false
+
+#       - name: Get pnpm store directory
+#         shell: bash
+#         run: |
+#           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+#       - name: Setup pnpm cache
+#         uses: actions/cache@v4
+#         with:
+#           path: ${{ env.STORE_PATH }}
+#           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+#           restore-keys: |
+#             ${{ runner.os }}-pnpm-store-
+
+#       - name: Install dependencies
+#         run: pnpm install --frozen-lockfile
+
+#       - name: Build
+#         run: pnpm build
+
+#       # ここにデプロイ先に応じたデプロイステップを追加

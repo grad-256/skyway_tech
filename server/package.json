@@ -3,10 +3,16 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "start": "node ./server.js"
+    "dev": "ts-node-dev --respawn server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.1",
     "@vitest/ui": "^0.32.4",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.2",
     "vite": "^4.5.5",
     "vitest": "^0.32.4"
