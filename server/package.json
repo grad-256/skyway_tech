@@ -11,11 +11,11 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.1",
-    "@vitest/ui": "^0.32.4",
+    "@vitest/ui": "^2.1.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.2",
-    "vite": "^4.5.5",
-    "vitest": "^0.32.4"
+    "vite": "^6.0.1",
+    "vitest": "^2.1.6"
   },
   "dependencies": {
     "@skyway-sdk/core": "^1.10.0",
