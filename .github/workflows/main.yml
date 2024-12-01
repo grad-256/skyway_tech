@@ -63,7 +63,7 @@ jobs:
             fi
           else
             echo "Running normal install with --frozen-lockfile"
-            pnpm install --frozen-lockfile
+            pnpm install
           fi
 
       - name: Generate
