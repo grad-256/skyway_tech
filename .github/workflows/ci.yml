@@ -1,19 +1,22 @@
-name: Script
+name: CI
 
 on:
+  push:
+    branches: [ main ]
   pull_request:
-    types: [opened]
+    types: [opened, synchronize, reopened]
 
+# 同時実行を制御
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint-and-test:
+  quality-check:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -43,16 +46,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Setup test environment
-        run: |
-          echo "Running normal install"
-          pnpm install  
-
-      - name: Generate
-        run: pnpm generate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Type check
         run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
 
       - name: Build
         run: pnpm build
