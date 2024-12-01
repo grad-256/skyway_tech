@@ -5,12 +5,17 @@ on:
     branches: [main]
     paths:
       - 'package.json'
+      - 'pnpm-lock.yaml'
+
+# 同時実行を制御
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   update-pnpm-lock:
-    # Dependabotのプルリクエストのみに実行
     runs-on: ubuntu-latest
-    # if: github.actor == 'dependabot[bot]'
+    if: github.actor == 'dependabot[bot]'
     permissions:
       contents: write
       pull-requests: write
@@ -18,27 +23,42 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+        with:
+          ref: ${{ github.head_ref }}
+          
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Update pnpm Lock
-        run: |
-          pnpm install
-      
-      # 更新された差分をコミット
-      - name: Commit changes
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add pnpm-lock.yaml
-          git commit -m "chore: update pnpm-lock.yaml after dependabot package update" || echo "No changes to commit"
-      
-      # 変更をプッシュ
-      - name: Push changes
-        uses: ad-m/github-push-action@master
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.head_ref }}
+          version: 8
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Update pnpm Lock
+        run: pnpm install --lockfile-only
+      
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): update pnpm-lock.yaml"
+          title: "chore(deps): update pnpm-lock.yaml"
+          body: "Dependencies have been updated according to package.json changes"
+          branch: "dependabot/update-pnpm-lock"
+          base: ${{ github.head_ref }}
