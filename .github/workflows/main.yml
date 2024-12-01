@@ -14,7 +14,7 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     permissions:
-      contents: ${{ if and(eq(github.event_name, 'pull_request'), eq(github.event.pull_request.user.login, 'dependabot[bot]')) }}writes${{ else }}read${{ endif }}
+      contents: ${{ github.actor == 'dependabot[bot]' && 'write' || 'read' }}
       id-token: write
       pull-requests: write
       checks: write
@@ -38,6 +38,14 @@ jobs:
         shell: bash
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Setup test environment
         run: |
