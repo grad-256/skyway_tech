@@ -48,23 +48,9 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Setup test environment
-        run: |
-          if [[ "${{ github.actor }}" == "dependabot[bot]" ]]; then
-            echo "Running Dependabot install without --immutable"
-            pnpm install
-
-            git config --global user.name 'github-actions[bot]'
-            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-            if [[ -n $(git status --porcelain pnpm-lock.yaml) ]]; then
-              git add pnpm-lock.yaml
-              git commit -m "chore(deps): update pnpm-lock.yaml"
-              git push origin HEAD:${{ github.head_ref }}
-            fi
-          else
-            echo "Running normal install with --frozen-lockfile"
-            pnpm install
-          fi
+        run: 
+          echo "Running normal install with --frozen-lockfile"
+          pnpm install --frozen-lockfile
 
       - name: Generate
         run: pnpm generate
