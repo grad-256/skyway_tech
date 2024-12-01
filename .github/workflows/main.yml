@@ -14,11 +14,8 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
-      pull-requests: write
-      checks: write
-      statuses: write
 
     steps:
       - name: Checkout repository

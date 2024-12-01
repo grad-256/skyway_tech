@@ -2,8 +2,7 @@ name: Dependabot pnpm Lock Update
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'package.json'
 
@@ -11,26 +10,35 @@ jobs:
   update-pnpm-lock:
     # Dependabotのプルリクエストのみに実行
     runs-on: ubuntu-latest
+    # if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
     
     steps:
-    - uses: actions/checkout@v4
-    # main.ymlからrun --rm appできる状態まで持ってくる
-    # Yarnロックファイルを更新
-    - name: Update pnpm Lock
-      run: |
-        pnpm install
-    
-    # 更新された差分をコミット
-    - name: Commit changes
-      run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git add pnpm-lock.yaml
-        git commit -m "chore: update pnpm-lock.yaml after dependabot package update" || echo "No changes to commit"
-    
-    # 変更をプッシュ
-    - name: Push changes
-      uses: ad-m/github-push-action@master
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: ${{ github.head_ref }}
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update pnpm Lock
+        run: |
+          pnpm install
+      
+      # 更新された差分をコミット
+      - name: Commit changes
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add pnpm-lock.yaml
+          git commit -m "chore: update pnpm-lock.yaml after dependabot package update" || echo "No changes to commit"
+      
+      # 変更をプッシュ
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.head_ref }}
