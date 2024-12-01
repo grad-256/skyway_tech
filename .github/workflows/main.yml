@@ -3,7 +3,7 @@ name: main
 on:
   push:
     branches: [main]
-  pull_request: # for dependabot access to secrets
+  pull_request:
     branches: [main]
 
 concurrency:
@@ -21,24 +21,51 @@ jobs:
       statuses: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
       - name: Setup test environment
         run: |
           if [[ "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]]; then
             echo "Running Dependabot install without --immutable"
-            echo "pnpm install を実行します"
             pnpm install
 
-            # lockfileの変更をコミット
             git config --global user.name 'github-actions[bot]'
             git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-            if [[ -n $(git status --porcelain package-lock.json) ]]; then
-              git add package-lock.json
-              git commit -m "chore(deps): update package-lock.json"
+            if [[ -n $(git status --porcelain pnpm-lock.yaml) ]]; then
+              git add pnpm-lock.yaml
+              git commit -m "chore(deps): update pnpm-lock.yaml"
               git push origin HEAD:${{ github.head_ref }}
             fi
           else
             echo "Running normal install with --immutable"
             pnpm install --immutable
           fi
-          pnpm generate
+
+      - name: Generate
+        run: pnpm generate
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build

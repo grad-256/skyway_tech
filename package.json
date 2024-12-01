@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "lint": "eslint .",
+    "type-check": "tsc",
+    "generate": "tsc --noEmit"
   },
   "devDependencies": {
     "@vitest/ui": "^0.32.4",
