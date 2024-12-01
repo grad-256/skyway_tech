@@ -4,7 +4,7 @@ import { SkyWayAuthToken, uuidV4, nowInSec } from "@skyway-sdk/token"
 import dotenv from "dotenv"
 
 const app = express()
-const port = 3001
+const port = process.env.PORT || 3001
 dotenv.config()
 
 // 環境変数の型定義
