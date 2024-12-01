@@ -62,8 +62,8 @@ jobs:
               git push origin HEAD:${{ github.head_ref }}
             fi
           else
-            echo "Running normal install with --immutable"
-            pnpm install --immutable
+            echo "Running normal install with --frozen-lockfile"
+            pnpm install --frozen-lockfile
           fi
 
       - name: Generate
