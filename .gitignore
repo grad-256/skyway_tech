@@ -23,3 +23,22 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# ローカルの.terraform ディレクトリ
+.terraform/
+
+# .tfstate ファイル
+*.tfstate
+*.tfstate.*
+
+# 変数ファイル（機密情報を含む可能性があるため）
+*.tfvars
+*.tfvars.json
+
+# CLI設定ファイル
+.terraformrc
+terraform.rc
+
+# クラッシュログ
+crash.log
+crash.*.log

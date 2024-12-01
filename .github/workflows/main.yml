@@ -1,96 +1,44 @@
-# name: main
+name: main
 
-# on:
-#   push:
-#     branches: [main]
-#   pull_request:
-#     branches: [main]
+on:
+  push:
+    branches: [main]
+  pull_request: # for dependabot access to secrets
+    branches: [main]
 
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.ref }}
-#   cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-# jobs:
-#   lint-and-test:
-#     runs-on: ubuntu-latest
-#     env:
-#       SKYWAY_API_KEY: ${{ secrets.SKYWAY_API_KEY }}
-#       SKYWAY_SECRET_KEY: ${{ secrets.SKYWAY_SECRET_KEY }}
-#       NODE_ENV: test
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: ${{ if and(eq(github.event_name, 'pull_request'), eq(github.event.pull_request.user.login, 'dependabot[bot]')) }}writes${{ else }}read${{ endif }}
+      id-token: write
+      pull-requests: write
+      checks: write
+      statuses: write
 
-#     steps:
-#       - uses: actions/checkout@v4
+    steps:
+      - name: Setup test environment
+        run: |
+          if [[ "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]]; then
+            echo "Running Dependabot install without --immutable"
+            echo "pnpm install を実行します"
+            pnpm install
 
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: '20'
+            # lockfileの変更をコミット
+            git config --global user.name 'github-actions[bot]'
+            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-#       - name: Install pnpm
-#         uses: pnpm/action-setup@v3
-#         with:
-#           version: 8
-#           run_install: false
-
-#       - name: Get pnpm store directory
-#         shell: bash
-#         run: |
-#           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-#       - name: Setup pnpm cache
-#         uses: actions/cache@v4
-#         with:
-#           path: ${{ env.STORE_PATH }}
-#           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-#           restore-keys: |
-#             ${{ runner.os }}-pnpm-store-
-
-#       - name: Install dependencies
-#         run: pnpm install --frozen-lockfile
-
-#       - name: Type check
-#         run: pnpm tsc --noEmit
-
-#       - name: Run tests
-#         run: pnpm test
-
-#   deploy:
-#     needs: lint-and-test
-#     if: github.ref == 'refs/heads/main'
-#     runs-on: ubuntu-latest
-#     environment: production
-
-#     steps:
-#       - uses: actions/checkout@v4
-
-#       - name: Setup Node.js
-#         uses: actions/setup-node@v4
-#         with:
-#           node-version: '20'
-
-#       - name: Install pnpm
-#         uses: pnpm/action-setup@v3
-#         with:
-#           version: 8
-#           run_install: false
-
-#       - name: Get pnpm store directory
-#         shell: bash
-#         run: |
-#           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-#       - name: Setup pnpm cache
-#         uses: actions/cache@v4
-#         with:
-#           path: ${{ env.STORE_PATH }}
-#           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-#           restore-keys: |
-#             ${{ runner.os }}-pnpm-store-
-
-#       - name: Install dependencies
-#         run: pnpm install --frozen-lockfile
-
-#       - name: Build
-#         run: pnpm build
-
-#       # ここにデプロイ先に応じたデプロイステップを追加
+            if [[ -n $(git status --porcelain package-lock.json) ]]; then
+              git add package-lock.json
+              git commit -m "chore(deps): update package-lock.json"
+              git push origin HEAD:${{ github.head_ref }}
+            fi
+          else
+            echo "Running normal install with --immutable"
+            pnpm install --immutable
+          fi
+          pnpm generate
