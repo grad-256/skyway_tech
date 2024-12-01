@@ -1,4 +1,4 @@
-name: Dependabot Yarn Lock Update
+name: Dependabot pnpm Lock Update
 
 on:
   pull_request:
@@ -10,7 +10,6 @@ on:
 jobs:
   update-pnpm-lock:
     # Dependabotのプルリクエストのみに実行
-    # if: github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     
     steps:
