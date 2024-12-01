@@ -11,6 +11,10 @@ jobs:
   update-pnpm-lock:
     # Dependabotのプルリクエストのみに実行
     runs-on: ubuntu-latest
+    # if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
     
     steps:
     - uses: actions/checkout@v4
