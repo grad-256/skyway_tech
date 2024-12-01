@@ -15,7 +15,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "types": [
-      "vitest/globals"
+      "vitest/globals",
+      "node"
     ]
   },
   "exclude":["node_modules"],
