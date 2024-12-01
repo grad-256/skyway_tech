@@ -20,6 +20,9 @@ importers:
       '@skyway-sdk/token':
         specifier: ^1.6.3
         version: 1.6.3
+      '@types/node':
+        specifier: ^22.10.1
+        version: 22.10.1
       cros:
         specifier: ^1.0.1
         version: 1.0.1
