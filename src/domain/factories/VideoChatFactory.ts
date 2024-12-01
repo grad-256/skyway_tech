@@ -1,5 +1,5 @@
 import { TempleElement } from "../../infrastructure/TempleElement"
-import { VideoChat } from "../../main"
+import { VideoChat } from "../../presentation/VideoChat"
 import { Stream } from "../entities/Stream"
 
 export abstract class VideoChatFactory {

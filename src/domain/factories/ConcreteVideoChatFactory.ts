@@ -1,11 +1,11 @@
 import { TempleElement } from "../../infrastructure/TempleElement"
-import { VideoChat } from "../../main"
+import { VideoChat } from "../../presentation/VideoChat"
 import { Stream } from "../entities/Stream"
 import { VideoChatFactory } from "./VideoChatFactory"
 
 export class ConcreteVideoChatFactory implements VideoChatFactory {
   createStream(): Stream {
-    return new Stream(undefined, undefined)
+    return new Stream()
   }
 
   createTempleElement(): TempleElement {
