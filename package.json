@@ -14,7 +14,11 @@
     "coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
     "type-check": "tsc",
-    "generate": "tsc --noEmit"
+    "generate": "tsc --noEmit",
+    "terraform:init": "cd terraform-aws-project && terraform init",
+    "terraform:apply": "cd terraform-aws-project && terraform apply",
+    "terraform:destroy": "cd terraform-aws-project && terraform destroy",
+    "terraform:plan": "cd terraform-aws-project && terraform plan"
   },
   "devDependencies": {
     "@vitest/ui": "^0.32.4",
