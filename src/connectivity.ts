@@ -37,9 +37,6 @@ import {
         });
         // テストルームに参加
         this.localMember = await this.testRoom?.join();
-        console.log(this.localMember);
-        
-
         // メディアデバイスのテスト
         const mediaTestResult = await this.testMediaDevices();
         // 実際の通信テスト

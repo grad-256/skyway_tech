@@ -224,6 +224,31 @@ export class VideoChat {
     }
   }
 
+  private generateRandomName(): string {
+    const adjectives = [
+      "陽気な",
+      "眠そうな",
+      "元気な",
+      "優しい",
+      "真面目な",
+      "おしゃべりな"
+    ]
+    const animals = [
+      "パンダ",
+      "キリン",
+      "ライオン",
+      "ペンギン",
+      "カンガルー",
+      "コアラ"
+    ]
+
+    const randomAdjective =
+      adjectives[Math.floor(Math.random() * adjectives.length)]
+    const randomAnimal = animals[Math.floor(Math.random() * animals.length)]
+
+    return `${randomAdjective}${randomAnimal}`
+  }
+
   private async attachStreamToUI(stream: any, publication: any) {
     console.log("Attaching stream to UI:", {
       kind: stream.track.kind,
@@ -264,6 +289,9 @@ export class VideoChat {
         existingWrapper.remove()
       }
 
+      console.log(this.room?.getLocalMember()?.id)
+      console.log(publication.publisher.id)
+
       // オーディオコントロールのラッパー作成
       const audioWrapper = document.createElement("div")
       audioWrapper.className = "audio-control-wrapper"
@@ -272,12 +300,23 @@ export class VideoChat {
       // 発行者名のラベル作成
       const publisherLabel = document.createElement("div")
       publisherLabel.className = "publisher-label"
-      const publisherName = publication.publisher.name || "匿名"
+
+      // ランダムな名前を生成して保存
+      const randomName = this.generateRandomName()
       const isLocal =
         publication.publisher.id === this.room?.getLocalMember()?.id
-      publisherLabel.textContent = isLocal
-        ? `${publisherName}（自分）`
-        : publisherName
+
+      // IDと名前を組み合わせて表示
+      const displayName = isLocal
+        ? `${randomName}（自分）- ${publication.publisher.id}`
+        : `${randomName} - ${publication.publisher.id}`
+
+      publisherLabel.textContent = displayName
+
+      // メタデータに名前を保存（後で参照できるように）
+      if (isLocal && this.room?.getLocalMember()) {
+        this.room.getLocalMember()?.updateMetadata(randomName)
+      }
 
       // ラッパーに要素を追加
       audioWrapper.appendChild(publisherLabel)
@@ -323,9 +362,6 @@ export class VideoChat {
 
       const localMember = await this.room?.join()
       if (!localMember) throw new Error("参加に失敗しました")
-
-      // 自分のIDを表示
-      this.templeElement.myId.textContent = localMember.id
 
       // メッセージ受信コールバックを設定
       this.room?.onMessageReceived(event => {
