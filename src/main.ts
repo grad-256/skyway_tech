@@ -94,6 +94,24 @@ window.addEventListener("load", async () => {
       console.log("Cleanup completed");
     });
 
+    // 接続テストボタンのイベントリスナー
+    const startTestButton = document.getElementById('start-test') as HTMLButtonElement;
+    const stopTestButton = document.getElementById('stop-test') as HTMLButtonElement;
+
+    startTestButton?.addEventListener('click', async () => {
+      try {
+        startTestButton.disabled = true;
+        stopTestButton.disabled = false;
+        await videoChat.checkConnectionStatus();
+      } catch (error) {
+        console.error('接続テストエラー:', error);
+        alert('接続テストに失敗しました');
+      } finally {
+        startTestButton.disabled = false;
+        stopTestButton.disabled = true;
+      }
+    });
+
   } catch (error) {
     console.error("初期化エラー:", error);
     alert("カメラとマイクへのアクセスを許可してください");
