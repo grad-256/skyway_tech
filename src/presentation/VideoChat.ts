@@ -221,6 +221,12 @@ export class VideoChat {
   }
 
   private async attachStreamToUI(stream: any, publication: any) {
+    // テスト用のストリームは無視する
+    if (publication.publisher.name?.includes('test-room')) {
+      console.log('テスト用のストリームをスキップします');
+      return;
+    }
+
     const mediaElement = this.createMediaElement(stream);
     
     // データ属性を追加

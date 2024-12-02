@@ -187,6 +187,13 @@ import {
           await this.testRoom.dispose();
           this.testRoom = null;
         }
+        
+        // オーディオ要素のクリーンアップ
+        const audioContainer = document.getElementById('remote-audio-container');
+        if (audioContainer) {
+          const testAudios = audioContainer.querySelectorAll('audio[data-publisher-id*="test-room"]');
+          testAudios.forEach(audio => audio.remove());
+        }
       } catch (error) {
         console.error('Cleanup error:', error);
       }
