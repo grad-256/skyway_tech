@@ -1,0 +1,427 @@
+/* 基本レイアウト */
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+/* ダークモード対応の変数 */
+:root {
+  --bg-color: #ffffff;
+  --text-color: #213547;
+  --card-bg: #f8f9fa;
+  --border-color: #e0e0e0;
+  --success-color: #2ecc71;
+  --warning-color: #f1c40f;
+  --error-color: #e74c3c;
+  --button-bg: #4CAF50;
+  --button-hover: #45a049;
+  --button-disabled: #cccccc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #242424;
+    --text-color: rgba(255, 255, 255, 0.87);
+    --card-bg: #2a2a2a;
+    --border-color: #404040;
+    --success-color: #00b894;
+    --warning-color: #fdcb6e;
+    --error-color: #ff7675;
+    --button-bg: #00b894;
+    --button-hover: #00a885;
+    --button-disabled: #404040;
+  }
+}
+
+/* ビデオ表示エリアのコンテナ */
+.video-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--bg-color);
+}
+
+/* メインビデオ（大きい画面） */
+#remote-media-area {
+  width: 100%;
+  height: 100%;
+}
+
+#remote-media-area video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ローカルビデオ（右上の小さい画面） */
+#local-video {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 240px;
+  height: 180px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid var(--border-color);
+  background-color: rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* チャットコンテナ */
+#chat-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 300px;
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  padding: 15px;
+  z-index: 90;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+#message-area {
+  height: 200px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+}
+
+#message-form {
+  display: flex;
+  gap: 8px;
+}
+
+#message-input {
+  flex: 1;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+/* コントロールパネル */
+.control-panel {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--card-bg);
+  padding: 10px 15px;
+  border-radius: 30px;
+  z-index: 90;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* オーディオ関連のスタイルを一箇所にまとめる */
+#remote-audio-container {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 89;
+}
+
+.remote-audio {
+  height: 30px;
+  width: 200px;
+  border-radius: 15px;
+  background-color: var(--card-bg);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* 接続ステータス */
+#connection-status {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 320px;
+  background-color: var(--card-bg);
+  border-radius: 12px;
+  padding: 20px;
+  z-index: 90;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#connection-status h3 {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-color);
+}
+
+#connection-status div {
+  margin-bottom: 8px;
+}
+
+#connection-status span {
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  min-width: 60px;
+  text-align: right;
+  display: inline-block;
+}
+
+/* テスト結果表示エリア */
+#connectivity-test-results {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+#connectivity-test-results h3 {
+  margin: 0 0 15px 0;
+  color: var(--text-color);
+}
+
+/* ステータス表示色 */
+.success {
+  color: var(--success-color);
+}
+
+.warning {
+  color: var(--warning-color);
+}
+
+.error {
+  color: var(--error-color);
+}
+
+/* テスト制御ボタン */
+.test-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.test-button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+#start-test {
+  background-color: var(--button-bg);
+  color: white;
+}
+
+#start-test:hover:not(:disabled) {
+  background-color: var(--button-hover);
+  transform: translateY(-1px);
+}
+
+#stop-test {
+  background-color: var(--error-color);
+  color: white;
+}
+
+#stop-test:hover:not(:disabled) {
+  background-color: #d63031;
+  transform: translateY(-1px);
+}
+
+.test-button:disabled {
+  background-color: var(--button-disabled);
+  cursor: not-allowed;
+  transform: none;
+  opacity: 0.7;
+}
+
+#room-name {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+#join,
+#leave {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  background-color: var(--button-bg);
+  color: white;
+  cursor: pointer;
+}
+
+#leave {
+  background-color: var(--error-color);
+}
+
+/* ローディングインジケーター */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid var(--card-bg);
+  border-top-color: var(--button-bg);
+  border-radius: 50%;
+  animation: spinner 1s linear infinite;
+}
+
+.loading-message {
+  position: absolute;
+  color: white;
+  font-size: 16px;
+  margin-top: 80px;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px 20px;
+  border-radius: 20px;
+}
+
+@keyframes spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* テスト中は接続テストボタンを無効化 */
+.test-controls.testing {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* テスト結果表示のアニメーション */
+#connectivity-test-results {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+#connectivity-test-results.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 接続ステータスパネル */
+#connection-status {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 320px;
+  background-color: var(--card-bg);
+  border-radius: 12px;
+  padding: 20px;
+  z-index: 90;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* テスト結果グリッド */
+.test-result-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.test-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+}
+
+.test-result-item .label {
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+.test-result-item .value {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.1);
+  min-width: 60px;
+  text-align: center;
+}
+
+/* 接続メトリクス */
+.connection-metrics {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* ステータス表示色 */
+.status-success {
+  color: var(--success-color) !important;
+}
+
+.status-warning {
+  color: var(--warning-color) !important;
+}
+
+.status-error {
+  color: var(--error-color) !important;
+}
+
+/* アニメーション */
+#connectivity-test-results {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+}
+
+#connectivity-test-results.show {
+  opacity: 1;
+  transform: translateY(0);
+  display: block !important;
+}
+
+/* リモートオーディオ要素のスタイル */
+.remote-audio {
+  height: 30px;
+  width: 150px;
+  border-radius: 15px;
+  background-color: rgba(0, 0, 0, 0.1);
+  margin: 5px 0;
+}
+
+/* オーディオ要素のコンテナ */
+#remote-media-area audio {
+  display: block;
+  margin: 10px 0;
+} 

@@ -3,17 +3,104 @@ import { Room } from "../domain/entities/Room"
 import { Stream } from "../domain/entities/Stream"
 import { TempleElement } from "../infrastructure/TempleElement"
 import { fetchSkyWayToken } from "../service/skyway"
+import { SkyWayConnectivityTest } from '../connectivity';
+
+interface ConnectionStatus {
+  isReady: boolean;
+  message: string;
+}
+
+interface ConnectivityTestResult {
+  iceConnectivity: boolean;
+  networkLatency: number;
+  audioSupported: boolean;
+  videoSupported: boolean;
+  recommendedConnectionType: 'P2P' | 'SFU' | null;
+  connectionState: string;
+}
 
 export class VideoChat {
   private room: Room | undefined
   private context: SkyWayContext | undefined
+  private lastConnectionTest: ConnectivityTestResult | null = null;
 
   constructor(private stream: Stream, private templeElement: TempleElement) {}
+
+  private showLoading(message: string = '接続テスト中...') {
+    const overlay = document.getElementById('loading-overlay');
+    const messageEl = overlay?.querySelector('.loading-message');
+    if (overlay && messageEl) {
+      messageEl.textContent = message;
+      overlay.style.display = 'flex';
+    }
+  }
+
+  private hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+  }
+
+  public async checkConnectionStatus(): Promise<ConnectionStatus> {
+    if (!this.context) {
+      return {
+        isReady: false,
+        message: "コンテキストが初期化されていません"
+      };
+    }
+
+    try {
+      this.showLoading();
+      const connectivityTest = new SkyWayConnectivityTest(this.context);
+      const testResult = await connectivityTest.runConnectivityTest();
+      this.lastConnectionTest = testResult;
+      
+      // テスト結果の表示を更新
+      this.updateTestResults(testResult);
+
+      // 接続状態の判定
+      if (testResult.networkLatency > 1000) {
+        return {
+          isReady: false,
+          message: `ネットワーク遅延が大きすぎます（${testResult.networkLatency}ms）`
+        };
+      }
+
+      if (!testResult.audioSupported || !testResult.videoSupported) {
+        return {
+          isReady: false,
+          message: "音声またはビデオデバイスにアクセスできません"
+        };
+      }
+
+      return {
+        isReady: true,
+        message: testResult.networkLatency > 300 ? "接続状態が不安定です" : "接続状態は良好です"
+      };
+
+    } catch (error) {
+      console.error("接続テストエラー:", error);
+      return {
+        isReady: false,
+        message: "接続テストに失敗しました"
+      };
+    } finally {
+      this.hideLoading();
+    }
+  }
 
   async initialize() {
     try {
       const token = await fetchSkyWayToken()
       this.context = await SkyWayContext.Create(token)
+      
+      const status = await this.checkConnectionStatus();
+      if (!status.isReady) {
+        throw new Error(status.message);
+      }
+
+      console.log('接続テスト結果:', this.lastConnectionTest);
     } catch (error) {
       console.error("初期化エラー:", error)
       throw error
@@ -38,7 +125,6 @@ export class VideoChat {
         name: roomName
       })
       this.room = new Room(skyWayRoom)
-
       // イベントリスナーの設定
       this.setupRoomEventListeners()
     } catch (error) {
@@ -135,28 +221,52 @@ export class VideoChat {
   }
 
   private async attachStreamToUI(stream: any, publication: any) {
-    const mediaElement = this.createMediaElement(stream)
-    // データ属性を追加して、後で要素の特定を容易にする
-    mediaElement.dataset.memberId = publication.publisher.id
-    mediaElement.dataset.publicationId = publication.id
+    const mediaElement = this.createMediaElement(stream);
+    
+    // データ属性を追加
+    mediaElement.dataset.memberId = publication.publisher.id;
+    mediaElement.dataset.publicationId = publication.id;
+    mediaElement.dataset.publisherId = publication.publisher.id;
 
-    await stream.attach(mediaElement)
-    this.templeElement.remoteMediaArea.appendChild(mediaElement)
+    await stream.attach(mediaElement);
+
+    // audio要素の場合は特別な配置を行う
+    if (stream.track.kind === "audio") {
+      const audioContainer = document.getElementById('remote-audio-container') || 
+        (() => {
+          const container = document.createElement('div');
+          container.id = 'remote-audio-container';
+          document.body.appendChild(container);
+          return container;
+        })();
+      
+      // 既存の同じパブリッシャーのaudio要素があれば削除
+      const existingAudio = audioContainer.querySelector(
+        `audio[data-publisher-id="${publication.publisher.id}"]`
+      );
+      if (existingAudio) {
+        existingAudio.remove();
+      }
+      
+      audioContainer.appendChild(mediaElement);
+    } else {
+      this.templeElement.remoteMediaArea.appendChild(mediaElement);
+    }
   }
 
   private createMediaElement(stream: any) {
-    const element =
-      stream.track.kind === "video"
-        ? document.createElement("video")
-        : document.createElement("audio")
-
-    element.autoplay = true
     if (stream.track.kind === "video") {
-      (element as HTMLVideoElement).playsInline = true
+      const element = document.createElement("video");
+      element.autoplay = true;
+      element.playsInline = true;
+      return element;
     } else {
-      element.controls = true
+      const element = document.createElement("audio");
+      element.autoplay = true;
+      element.controls = true;
+      element.classList.add('remote-audio');
+      return element;
     }
-    return element
   }
 
   async joinRoom() {
@@ -165,6 +275,16 @@ export class VideoChat {
     }
 
     try {
+      // 入室前に接続状態を再確認
+      const status = await this.checkConnectionStatus();
+      if (!status.isReady) {
+        throw new Error(status.message);
+      }
+
+      if (status.message.includes("不安定")) {
+        console.warn(status.message);
+      }
+
       const localMember = await this.room?.join();
       if (!localMember) throw new Error("参加に失敗しました");
 
@@ -269,6 +389,60 @@ export class VideoChat {
     } catch (error) {
       console.error("メッセージ送信エラー:", error);
       throw error;
+    }
+  }
+
+  private updateTestResults(testResult: ConnectivityTestResult) {
+    const results = document.getElementById('connectivity-test-results');
+    if (!results) return;
+
+    // テスト結果を表示
+    results.style.display = 'block';
+    results.classList.add('show');
+
+    // 各要素の更新と状態に応じたクラス付与
+    this.updateTestResultItem('ice-connectivity', 
+      testResult.iceConnectivity ? '成功' : '失敗',
+      testResult.iceConnectivity ? 'status-success' : 'status-error'
+    );
+
+    this.updateTestResultItem('network-latency',
+      `${testResult.networkLatency}ms`,
+      testResult.networkLatency <= 100 ? 'status-success' : 
+      testResult.networkLatency <= 300 ? 'status-warning' : 'status-error'
+    );
+
+    this.updateTestResultItem('audio-support',
+      testResult.audioSupported ? '利用可能' : '利用不可',
+      testResult.audioSupported ? 'status-success' : 'status-error'
+    );
+
+    this.updateTestResultItem('video-support',
+      testResult.videoSupported ? '利用可能' : '利用不可',
+      testResult.videoSupported ? 'status-success' : 'status-error'
+    );
+
+    this.updateTestResultItem('recommended-type',
+      testResult.recommendedConnectionType || '不明',
+      testResult.recommendedConnectionType === 'P2P' ? 'status-success' : 'status-warning'
+    );
+
+    this.updateTestResultItem('test-connection-state',
+      testResult.connectionState,
+      testResult.connectionState === 'connected' ? 'status-success' : 'status-warning'
+    );
+
+    // 接続メトリクスの更新
+    if (this.templeElement.connectionState) {
+      this.templeElement.connectionState.textContent = testResult.connectionState;
+    }
+  }
+
+  private updateTestResultItem(id: string, value: string, statusClass: string) {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = value;
+      element.className = `value ${statusClass}`;
     }
   }
 }

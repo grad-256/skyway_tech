@@ -3,7 +3,7 @@ import { AbTempleElement } from "../interfaces/AbTempleElement"
 export class TempleElement implements AbTempleElement {
   public localVideo: HTMLVideoElement | HTMLAudioElement
   public buttonArea: HTMLButtonElement
-  public remoteMediaArea: HTMLButtonElement
+  public remoteMediaArea: HTMLDivElement
   public roomNameInput: HTMLInputElement
   public myId: HTMLElement
   // public joinButton: HTMLButtonElement
@@ -24,7 +24,7 @@ export class TempleElement implements AbTempleElement {
     ) as HTMLButtonElement
     this.remoteMediaArea = document.getElementById(
       "remote-media-area"
-    ) as HTMLButtonElement
+    ) as HTMLDivElement
     this.roomNameInput = document.getElementById(
       "room-name"
     ) as HTMLInputElement
