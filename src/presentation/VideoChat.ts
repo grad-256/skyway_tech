@@ -1,4 +1,11 @@
-import { RemoteDataStream, SkyWayContext, SkyWayRoom } from "@skyway-sdk/room"
+import {
+  LocalAudioStream,
+  LocalP2PRoomMember,
+  P2PRoom,
+  RemoteDataStream,
+  SkyWayContext,
+  SkyWayRoom
+} from "@skyway-sdk/room"
 import { Room } from "../domain/entities/Room"
 import { Stream } from "../domain/entities/Stream"
 import { TempleElement } from "../infrastructure/TempleElement"
@@ -23,6 +30,11 @@ export class VideoChat {
   private room: Room | undefined
   private context: SkyWayContext | undefined
   private lastConnectionTest: ConnectivityTestResult | null = null
+  private hasCompletedInitialTest: boolean = false
+  private testContext: SkyWayContext | null = null
+  private testRoom: P2PRoom | null = null
+  private memberA: LocalP2PRoomMember | null = null
+  private testContainer: HTMLElement | null = null
 
   constructor(
     private stream: Stream,
@@ -95,15 +107,298 @@ export class VideoChat {
     }
   }
 
+  private async testLocalStream(): Promise<void> {
+    if (this.hasCompletedInitialTest) return
+
+    try {
+      this.showLoading("ローカルストリームをテスト中...")
+
+      // テスト用のコンテナを作成
+      this.testContainer = this.createTestContainer()
+      const videoPreviewContainer =
+        this.testContainer.querySelector<HTMLDivElement>(
+          ".video-preview-container"
+        )
+      const audioPreviewContainer =
+        this.testContainer.querySelector<HTMLDivElement>(
+          ".audio-preview-container"
+        )
+
+      if (!videoPreviewContainer || !audioPreviewContainer) {
+        throw new Error("プレビューコンテナが見つかりません")
+      }
+
+      // ビデオプレビューの設定
+      if (this.stream.videoStream) {
+        const videoPreview = document.createElement("video")
+        videoPreview.autoplay = true
+        videoPreview.playsInline = true
+        videoPreview.muted = true
+        videoPreview.style.cssText = `
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 4px;
+        `
+        await this.stream.videoStream.attach(videoPreview)
+        videoPreviewContainer.appendChild(videoPreview)
+      } else {
+        videoPreviewContainer.innerHTML = `
+          <div class="no-video-message" style="
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+          ">
+            カメラが利用できません
+          </div>
+        `
+      }
+
+      // オーディオプレビューの設定
+      if (this.stream.audioStream) {
+        const audioMeter = document.createElement("div")
+        audioMeter.className = "audio-meter"
+        audioMeter.innerHTML = `
+          <div style="
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+          ">
+            <span>音声レベル:</span>
+            <div class="meter-bar" style="
+              flex-grow: 1;
+              height: 20px;
+              background: #1a1a1a;
+              border-radius: 10px;
+              overflow: hidden;
+            ">
+              <div class="meter-fill" style="
+                width: 0%;
+                height: 100%;
+                background: #4caf50;
+                transition: width 0.1s ease;
+              "></div>
+            </div>
+          </div>
+        `
+        audioPreviewContainer.appendChild(audioMeter)
+
+        // 音声レベルの可視化
+        const cleanup = this.visualizeAudio(
+          this.stream.audioStream,
+          audioMeter.querySelector(".meter-fill")
+        )
+
+        // 10秒後にクリーンアップ
+        setTimeout(() => {
+          if (cleanup) cleanup()
+        }, 10000)
+      } else {
+        audioPreviewContainer.innerHTML = `
+          <div style="
+            color: #666;
+            text-align: center;
+            padding: 10px;
+          ">
+            マイクが利用できません
+          </div>
+        `
+      }
+
+      // テスト用のコンテキストとルームの設定
+      const testToken = await fetchSkyWayToken()
+      this.testContext = await SkyWayContext.Create(testToken)
+      const testRoomName = `test-room-${Date.now()}`
+      this.testRoom = await SkyWayRoom.FindOrCreate(this.testContext, {
+        type: "p2p",
+        name: testRoomName,
+        options: {
+          turnPolicy: "turnOnly"
+        }
+      })
+
+      this.memberA = await this.testRoom.join()
+
+      // ストリームの公開
+      if (this.stream.videoStream) {
+        await this.memberA.publish(this.stream.videoStream)
+      }
+      if (this.stream.audioStream) {
+        await this.memberA.publish(this.stream.audioStream)
+      }
+    } catch (error) {
+      console.error("ローカルストリームテストエラー:", error)
+      this.hideLoading()
+      // クリーンアップ
+      if (this.memberA) await this.memberA.leave()
+      if (this.testRoom) await this.testRoom.dispose()
+      if (this.testContext) await this.testContext.dispose()
+      if (this.testContainer) this.testContainer.remove()
+      throw error
+    }
+  }
+
+  // 音声レベルの可視化メソッドを追加
+  private visualizeAudio(
+    audioStream: LocalAudioStream,
+    meterElement: HTMLElement | null
+  ) {
+    if (!meterElement || !audioStream.track) return
+
+    // MediaStreamを作成
+    const mediaStream = new MediaStream([audioStream.track])
+
+    try {
+      const audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(mediaStream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+      const updateMeter = () => {
+        analyser.getByteFrequencyData(dataArray)
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length
+        const level = Math.min(100, (average / 128) * 100)
+
+        meterElement.style.width = `${level}%`
+        meterElement.style.backgroundColor = level > 50 ? "#4caf50" : "#ffd700"
+
+        requestAnimationFrame(updateMeter)
+      }
+
+      updateMeter()
+
+      // AudioContextのクリーンアップ用の関数を返す
+      return () => {
+        try {
+          source.disconnect()
+          audioContext.close()
+        } catch (error) {
+          console.error("AudioContext cleanup error:", error)
+        }
+      }
+    } catch (error) {
+      console.error("Audio visualization error:", error)
+      return () => {}
+    }
+  }
+
+  private createTestContainer(): HTMLElement {
+    const container = document.createElement("div")
+    container.className = "stream-test-container"
+    container.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      padding: 20px;
+      border-radius: 8px;
+      z-index: 1000;
+      color: white;
+      text-align: center;
+      min-width: 500px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    `
+
+    container.innerHTML = `
+      <div class="test-header">
+        <h3 style="margin: 0 0 10px 0; color: white; font-size: 1.2em;">通信テスト中...</h3>
+        <p style="margin: 0 0 20px 0; color: #e0e0e0;">ビデオと音声の確認を行っています</p>
+      </div>
+      <div class="video-preview-container" style="
+        width: 480px;
+        height: 360px;
+        background: #1a1a1a;
+        margin: 0 auto 20px;
+        border-radius: 4px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      "></div>
+      <div class="audio-preview-container" style="
+        margin: 10px auto;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      "></div>
+      <div class="test-status" style="
+        margin-top: 10px;
+        font-size: 14px;
+        color: #e0e0e0;
+      ">
+        <p>残り時間: <span class="test-timer" style="color: white; font-weight: bold;">10</span>秒</p>
+        <button class="test-next-button" style="
+          background: #4CAF50;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          margin-left: 10px;
+          display: none;
+        ">
+        次へ進む
+      </button>
+      </div>
+    `
+
+    document.body.appendChild(container)
+
+    // タイマーの更新
+    let timeLeft = 10
+    const timerElement = container.querySelector(
+      ".test-timer"
+    ) as HTMLDivElement
+    const actionsContainer = container.querySelector(
+      ".test-next-button"
+    ) as HTMLDivElement
+    const timer = setInterval(async () => {
+      timeLeft--
+      if (timerElement) timerElement.textContent = timeLeft.toString()
+      if (timeLeft <= 0) {
+        clearInterval(timer)
+        if (actionsContainer && timerElement) {
+          actionsContainer.style.display = "block"
+          timerElement.parentElement!.style.display = "none" // タイマーを非表示
+        }
+      }
+    }, 1000)
+
+    // 次へ進むボタンのイベントハンドラ
+    actionsContainer?.addEventListener("click", async () => {
+      if (this.memberA) await this.memberA.leave()
+      if (this.testRoom) await this.testRoom.dispose()
+      if (this.testContext) await this.testContext.dispose()
+      if (this.testContainer) this.testContainer.remove()
+      // ローディングを非表示
+      this.hideLoading()
+      container.remove()
+      // 必要に応じて追加の処理（例：通信状況の確認画面を表示）
+    })
+
+    return container
+  }
+
   async initialize() {
     try {
       const token = await fetchSkyWayToken()
       this.context = await SkyWayContext.Create(token)
 
+      // 接続状態チェック
       const status = await this.checkConnectionStatus()
       if (!status.isReady) {
         throw new Error(status.message)
       }
+
+      // ローカルストリームのテスト
+      await this.testLocalStream()
+      this.hasCompletedInitialTest = true
 
       console.log("接続テスト結果:", this.lastConnectionTest)
     } catch (error) {
@@ -309,7 +604,7 @@ export class VideoChat {
       const isLocal =
         publication.publisher.id === this.room?.getLocalMember()?.id
 
-      // IDと名前を組み合わせて表示
+      // IDと名前をみ合わせて表示
       const displayName = isLocal
         ? `${randomName}（自分）- ${publication.publisher.id}`
         : `${randomName} - ${publication.publisher.id}`
@@ -347,20 +642,141 @@ export class VideoChat {
     }
   }
 
+  private async showConnectivityTestModal(): Promise<boolean> {
+    try {
+      const modalContainer = document.createElement("div")
+      modalContainer.className = "connectivity-test-modal"
+      modalContainer.innerHTML = `
+        <div class="modal-content">
+          <h2>通信状況の確認</h2>
+          <div class="test-phase">
+            <div class="test-status">
+              <div class="status-indicator"></div>
+              <p class="status-message">通信テストを開始します</p>
+            </div>
+            
+            <div class="test-preview">
+              <div class="video-preview-container" style="
+                width: 480px;
+                height: 360px;
+                background: #1a1a1a;
+                margin: 0 auto 20px;
+                border-radius: 4px;
+                overflow: hidden;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+              "></div>
+              <div class="audio-preview-container" style="
+                margin: 10px auto;
+                padding: 10px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 4px;
+              "></div>
+            </div>
+
+            <div id="test-results" class="test-results">
+              <div class="result-item">
+                <span class="label">ICE接続状態:</span>
+                <span class="value" id="test-ice-status">-</span>
+              </div>
+              <div class="result-item">
+                <span class="label">ネットワーク遅延:</span>
+                <span class="value" id="test-latency">-</span>
+              </div>
+              <div class="result-item">
+                <span class="label">音声デバイス:</span>
+                <span class="value" id="test-audio">-</span>
+              </div>
+              <div class="result-item">
+                <span class="label">映像デバイス:</span>
+                <span class="value" id="test-video">-</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="cancel-test">キャンセル</button>
+            <button class="start-room" disabled>入室する</button>
+          </div>
+        </div>
+      `
+      document.body.appendChild(modalContainer)
+
+      // 接続テストの実行
+      const testResult = await this.runConnectivityTest(modalContainer)
+
+      // テスト結果に基づいてUIを更新
+      this.updateTestUI(modalContainer, testResult)
+
+      // ユーザー選択を待つ
+      return new Promise(resolve => {
+        const startButton = modalContainer.querySelector(
+          ".start-room"
+        ) as HTMLButtonElement
+        const cancelButton = modalContainer.querySelector(
+          ".cancel-test"
+        ) as HTMLButtonElement
+
+        startButton.disabled = !testResult.isReady
+
+        startButton.addEventListener("click", () => {
+          modalContainer.remove()
+          resolve(true)
+        })
+
+        cancelButton.addEventListener("click", () => {
+          modalContainer.remove()
+          resolve(false)
+        })
+      })
+    } catch (error) {
+      console.error("接続テストエラー:", error)
+      return false
+    }
+  }
+
+  private async runConnectivityTest(
+    modalContainer: HTMLElement
+  ): Promise<ConnectionStatus> {
+    try {
+      const statusIndicator = modalContainer.querySelector(".status-indicator")
+      const statusMessage = modalContainer.querySelector(".status-message")
+
+      if (statusIndicator && statusMessage) {
+        statusIndicator.className = "status-indicator testing"
+        statusMessage.textContent = "接続テスト実行中..."
+      }
+
+      // テスト用のルームを作成し���ストリームをテスト
+      await this.testLocalStream()
+
+      // 接続状態のチェック
+      const status = await this.checkConnectionStatus()
+
+      if (statusIndicator && statusMessage) {
+        statusIndicator.className = `status-indicator ${
+          status.isReady ? "success" : "error"
+        }`
+        statusMessage.textContent = status.message
+      }
+
+      return status
+    } catch (error) {
+      console.error("接続テスト実行エラー:", error)
+      throw error
+    }
+  }
+
+  // joinRoom メソッドを更新
   async joinRoom() {
     if (!this.room) {
       await this.createRoom()
     }
 
     try {
-      // 入室前に接続状態を再確認
-      const status = await this.checkConnectionStatus()
-      if (!status.isReady) {
-        throw new Error(status.message)
-      }
-
-      if (status.message.includes("不安定")) {
-        console.warn(status.message)
+      // 接続テストモーダルを表示
+      const canProceed = await this.showConnectivityTestModal()
+      if (!canProceed) {
+        throw new Error("ユーザーがキャンセルしました")
       }
 
       const localMember = await this.room?.join()
@@ -482,47 +898,49 @@ export class VideoChat {
 
     // 各要素の更新と状態に応じたクラス付与
     this.updateTestResultItem(
+      results,
       "ice-connectivity",
       testResult.iceConnectivity ? "成功" : "失敗",
-      testResult.iceConnectivity ? "status-success" : "status-error"
+      testResult.iceConnectivity ? "success" : "error"
     )
 
     this.updateTestResultItem(
+      results,
       "network-latency",
       `${testResult.networkLatency}ms`,
       testResult.networkLatency <= 100
-        ? "status-success"
+        ? "success"
         : testResult.networkLatency <= 300
-          ? "status-warning"
-          : "status-error"
+          ? "warning"
+          : "error"
     )
 
     this.updateTestResultItem(
+      results,
       "audio-support",
       testResult.audioSupported ? "利用可能" : "利用不可",
-      testResult.audioSupported ? "status-success" : "status-error"
+      testResult.audioSupported ? "success" : "error"
     )
 
     this.updateTestResultItem(
+      results,
       "video-support",
       testResult.videoSupported ? "利用可能" : "利用不可",
-      testResult.videoSupported ? "status-success" : "status-error"
+      testResult.videoSupported ? "success" : "error"
     )
 
     this.updateTestResultItem(
+      results,
       "recommended-type",
       testResult.recommendedConnectionType || "不明",
-      testResult.recommendedConnectionType === "P2P"
-        ? "status-success"
-        : "status-warning"
+      testResult.recommendedConnectionType === "P2P" ? "success" : "warning"
     )
 
     this.updateTestResultItem(
+      results,
       "test-connection-state",
       testResult.connectionState,
-      testResult.connectionState === "connected"
-        ? "status-success"
-        : "status-warning"
+      testResult.connectionState === "connected" ? "success" : "warning"
     )
 
     // 接続メトリクスの更新
@@ -532,11 +950,112 @@ export class VideoChat {
     }
   }
 
-  private updateTestResultItem(id: string, value: string, statusClass: string) {
-    const element = document.getElementById(id)
-    if (element) {
-      element.textContent = value
-      element.className = `value ${statusClass}`
+  private updateTestUI(
+    modalContainer: HTMLElement,
+    testResult: ConnectionStatus
+  ): void {
+    try {
+      this.updateStatusIndicator(modalContainer, testResult)
+      this.updateDetailedTestResults(modalContainer)
+      this.updateStartButton(modalContainer, testResult)
+    } catch (error) {
+      console.error("テストUI更新エラー:", error)
     }
+  }
+
+  private updateStatusIndicator(
+    modalContainer: HTMLElement,
+    testResult: ConnectionStatus
+  ): void {
+    const statusIndicator =
+      modalContainer.querySelector<HTMLElement>(".status-indicator")
+    const statusMessage =
+      modalContainer.querySelector<HTMLElement>(".status-message")
+
+    if (!statusIndicator || !statusMessage) {
+      console.warn("ステータス表示要素が見つかりません")
+      return
+    }
+
+    statusIndicator.className = `status-indicator ${
+      testResult.isReady ? "success" : "error"
+    }`
+    statusMessage.textContent = testResult.message
+  }
+
+  private updateDetailedTestResults(modalContainer: HTMLElement): void {
+    if (!this.lastConnectionTest) {
+      console.warn("接続テスト結果が存在しません")
+      return
+    }
+
+    const testResults: Array<{
+      id: string
+      value: string
+      getStatus: () => "success" | "warning" | "error"
+    }> = [
+      {
+        id: "test-ice-status",
+        value: this.lastConnectionTest.iceConnectivity ? "成功" : "失敗",
+        getStatus: () =>
+          this.lastConnectionTest?.iceConnectivity ? "success" : "error"
+      },
+      {
+        id: "test-latency",
+        value: `${this.lastConnectionTest.networkLatency}ms`,
+        getStatus: () => {
+          const latency = this.lastConnectionTest?.networkLatency ?? 0
+          if (latency <= 100) return "success"
+          if (latency <= 300) return "warning"
+          return "error"
+        }
+      },
+      {
+        id: "test-audio",
+        value: this.lastConnectionTest.audioSupported ? "利用可能" : "利用不可",
+        getStatus: () =>
+          this.lastConnectionTest?.audioSupported ? "success" : "error"
+      },
+      {
+        id: "test-video",
+        value: this.lastConnectionTest.videoSupported ? "利用可能" : "利用不可",
+        getStatus: () =>
+          this.lastConnectionTest?.videoSupported ? "success" : "error"
+      }
+    ]
+
+    testResults.forEach(({ id, value, getStatus }) => {
+      this.updateTestResultItem(modalContainer, id, value, getStatus())
+    })
+  }
+
+  private updateStartButton(
+    modalContainer: HTMLElement,
+    testResult: ConnectionStatus
+  ): void {
+    const startButton =
+      modalContainer.querySelector<HTMLButtonElement>(".start-room")
+    if (!startButton) {
+      console.warn("入室ボタンが見つかりません")
+      return
+    }
+
+    startButton.disabled = !testResult.isReady
+  }
+
+  private updateTestResultItem(
+    modalContainer: HTMLElement,
+    id: string,
+    value: string,
+    statusClass: "success" | "warning" | "error"
+  ): void {
+    const element = modalContainer.querySelector<HTMLElement>(`#${id}`)
+    if (!element) {
+      console.warn(`テスト結果要素が見つかりません: ${id}`)
+      return
+    }
+
+    element.textContent = value
+    element.className = `value ${statusClass}`
   }
 }
