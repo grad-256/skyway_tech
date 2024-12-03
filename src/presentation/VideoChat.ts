@@ -24,7 +24,10 @@ export class VideoChat {
   private context: SkyWayContext | undefined
   private lastConnectionTest: ConnectivityTestResult | null = null
 
-  constructor(private stream: Stream, private templeElement: TempleElement) {}
+  constructor(
+    private stream: Stream,
+    private templeElement: TempleElement
+  ) {}
 
   private showLoading(message: string = "接続テスト中...") {
     const overlay = document.getElementById("loading-overlay")
@@ -490,8 +493,8 @@ export class VideoChat {
       testResult.networkLatency <= 100
         ? "status-success"
         : testResult.networkLatency <= 300
-        ? "status-warning"
-        : "status-error"
+          ? "status-warning"
+          : "status-error"
     )
 
     this.updateTestResultItem(

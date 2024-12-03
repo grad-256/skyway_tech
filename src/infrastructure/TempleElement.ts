@@ -32,9 +32,13 @@ export class TempleElement implements AbTempleElement {
     // this.joinButton = document.getElementById("join") as HTMLButtonElement
     this.subscribeButton = document.createElement("button")
 
-    this.connectionState = document.getElementById("connection-state") as HTMLElement
+    this.connectionState = document.getElementById(
+      "connection-state"
+    ) as HTMLElement
     this.bytesSent = document.getElementById("bytes-sent") as HTMLElement
-    this.bytesReceived = document.getElementById("bytes-received") as HTMLElement
+    this.bytesReceived = document.getElementById(
+      "bytes-received"
+    ) as HTMLElement
     this.rtt = document.getElementById("rtt") as HTMLElement
   }
 }

@@ -2,7 +2,11 @@
 body {
   margin: 0;
   padding: 20px;
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    sans-serif;
   line-height: 1.6;
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -17,7 +21,7 @@ body {
   --success-color: #2ecc71;
   --warning-color: #f1c40f;
   --error-color: #e74c3c;
-  --button-bg: #4CAF50;
+  --button-bg: #4caf50;
   --button-hover: #45a049;
   --button-disabled: #cccccc;
 }
@@ -448,4 +452,3 @@ body {
 #remote-audio-container:empty {
   display: none;
 }
- 

@@ -12,16 +12,19 @@ import {
 export class Room {
   private localMember: LocalP2PRoomMember | null = null
   private messageStream: LocalDataStream | null = null
-  private subscriptions: Map<string, {
-    subscription: RoomSubscription<RemoteStream>
-    stream: RemoteStream
-  }> = new Map()
+  private subscriptions: Map<
+    string,
+    {
+      subscription: RoomSubscription<RemoteStream>
+      stream: RemoteStream
+    }
+  > = new Map()
   private messageCallbacks: Set<(event: MessageEvent) => void> = new Set()
 
   constructor(private skyWayRoom: P2PRoom) {}
 
   onMessageReceived(callback: (event: MessageEvent) => void) {
-    this.messageCallbacks.add(callback);
+    this.messageCallbacks.add(callback)
   }
 
   async initializeMessaging() {
@@ -46,8 +49,10 @@ export class Room {
 
       // 既存データストリームを購読
       for (const pub of publications) {
-        if (pub.contentType === 'data' && 
-            pub.publisher.id !== this.localMember.id) {
+        if (
+          pub.contentType === "data" &&
+          pub.publisher.id !== this.localMember.id
+        ) {
           console.log("既存のデータストリームを発見:", pub.id)
           await this.trySubscribeToMessages(pub.id)
         }
@@ -65,13 +70,13 @@ export class Room {
       const subscription = await this.localMember!.subscribe(publicationId)
       if (subscription.stream instanceof RemoteDataStream) {
         this.subscriptions.set(publicationId, subscription)
-        
-        subscription.stream.onData.add((data) => {
+
+        subscription.stream.onData.add(data => {
           try {
             console.log("データストリームからメッセージを受信:", data)
-            
-            const senderId = 'unknown'
-            const senderName = '匿名'
+
+            const senderId = "unknown"
+            const senderName = "匿名"
 
             const messageEvent: MessageEvent = {
               data,
@@ -80,7 +85,7 @@ export class Room {
                 name: senderName
               }
             }
-            
+
             this.messageCallbacks.forEach(cb => {
               try {
                 cb(messageEvent)
@@ -111,10 +116,12 @@ export class Room {
       onMemberLeft: this.skyWayRoom.onMemberLeft,
       onStreamPublished: {
         add: (callback: (event: StreamPublishedEvent) => void) => {
-          this.skyWayRoom.onStreamPublished.add(async (event) => {
+          this.skyWayRoom.onStreamPublished.add(async event => {
             const publication = event.publication
-            if (publication.contentType === 'data' && 
-                publication.publisher.id !== this.localMember?.id) {
+            if (
+              publication.contentType === "data" &&
+              publication.publisher.id !== this.localMember?.id
+            ) {
               await this.trySubscribeToMessages(publication.id)
             } else {
               callback(event)
@@ -125,17 +132,17 @@ export class Room {
       onStreamUnpublished: this.skyWayRoom.onStreamUnpublished,
       onPublicationSubscribed: {
         add: (callback: (event: any) => void) => {
-          this.skyWayRoom.onPublicationSubscribed.add((event) => {
+          this.skyWayRoom.onPublicationSubscribed.add(event => {
             const { subscription } = event
             if (subscription.stream instanceof RemoteDataStream) {
-              subscription.stream.onData.add((data) => {
+              subscription.stream.onData.add(data => {
                 try {
                   const messageEvent = {
                     data,
                     subscription,
                     sender: {
                       id: subscription.publication.publisher.id,
-                      name: subscription.publication.publisher.name || '匿名'
+                      name: subscription.publication.publisher.name || "匿名"
                     }
                   }
                   this.messageCallbacks.forEach(cb => cb(messageEvent))
@@ -157,16 +164,16 @@ export class Room {
       console.log("既に購読済みのパブリケーション:", publicationId)
       return this.subscriptions.get(publicationId)!
     }
-    
+
     try {
       console.log("メッセージを購読します:", publicationId)
       const subscription = await this.localMember.subscribe(publicationId)
-      
+
       if (subscription.stream instanceof RemoteDataStream) {
         this.subscriptions.set(publicationId, subscription)
         console.log("データストリームの購読完了:", publicationId)
       }
-      
+
       return subscription
     } catch (error) {
       console.error("メッセージ購読エラー:", error)
@@ -199,7 +206,7 @@ export class Room {
       console.log("既に購読済みのストリーム:", publicationId)
       return this.subscriptions.get(publicationId)!
     }
-    
+
     try {
       const subscription = await this.localMember.subscribe(publicationId)
       this.subscriptions.set(publicationId, subscription)
@@ -224,9 +231,9 @@ export class Room {
 
 // メッセージ受信イベントの型定義を追加
 interface MessageEvent {
-  data: any;
+  data: any
   sender: {
-    id: string;
-    name: string;
-  };
+    id: string
+    name: string
+  }
 }
