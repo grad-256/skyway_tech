@@ -31,16 +31,29 @@ app.get("/generate-token", (req: Request, res: Response) => {
           actions: ["read", "write"],
           channels: [
             {
-              id: '*',
-              name: '*',
+              id: "*",
+              name: "*",
               actions: ["read", "write", "create", "delete", "updateMetadata"],
               members: [
                 {
                   id: "*",
                   name: "*",
-                  actions: ["write", "create", "delete", "signal", "updateMetadata"],
+                  actions: [
+                    "write",
+                    "create",
+                    "delete",
+                    "signal",
+                    "updateMetadata"
+                  ],
                   publication: {
-                    actions: ["write", "create", "delete", "updateMetadata", "enable", "disable"]
+                    actions: [
+                      "write",
+                      "create",
+                      "delete",
+                      "updateMetadata",
+                      "enable",
+                      "disable"
+                    ]
                   },
                   subscription: {
                     actions: ["write", "create", "delete"]
@@ -73,4 +86,4 @@ app.get("/generate-token", (req: Request, res: Response) => {
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`)
-}) 
+})

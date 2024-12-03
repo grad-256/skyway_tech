@@ -2,7 +2,11 @@
 body {
   margin: 0;
   padding: 20px;
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    sans-serif;
   line-height: 1.6;
   background-color: var(--bg-color);
   color: var(--text-color);
@@ -17,7 +21,7 @@ body {
   --success-color: #2ecc71;
   --warning-color: #f1c40f;
   --error-color: #e74c3c;
-  --button-bg: #4CAF50;
+  --button-bg: #4caf50;
   --button-hover: #45a049;
   --button-disabled: #cccccc;
 }
@@ -137,14 +141,16 @@ body {
   align-items: center;
   gap: 10px;
   z-index: 89;
+  padding: 10px;
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 }
 
 .remote-audio {
-  height: 30px;
-  width: 200px;
-  border-radius: 15px;
-  background-color: var(--card-bg);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  width: 240px;
+  height: 32px;
+  border-radius: 16px;
 }
 
 /* 接続ステータス */
@@ -424,4 +430,25 @@ body {
 #remote-media-area audio {
   display: block;
   margin: 10px 0;
-} 
+}
+
+.audio-control-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  width: 100%;
+}
+
+.publisher-label {
+  font-size: 0.9rem;
+  color: var(--text-color);
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+/* コンテナが空の場合は非表示 */
+#remote-audio-container:empty {
+  display: none;
+}
