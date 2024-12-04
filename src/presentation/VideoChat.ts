@@ -35,6 +35,9 @@ export class VideoChat {
   private testRoom: P2PRoom | null = null
   private memberA: LocalP2PRoomMember | null = null
   private testContainer: HTMLElement | null = null
+  private memberB: LocalP2PRoomMember | null = null
+  private roomB: P2PRoom | null = null
+  private testContextB: SkyWayContext | null = null
 
   constructor(
     private stream: Stream,
@@ -128,8 +131,43 @@ export class VideoChat {
         throw new Error("プレビューコンテナが見つかりません")
       }
 
+      // テスト用のコンテキストとルームの設定
+      const testToken = await fetchSkyWayToken()
+      this.testContext = await SkyWayContext.Create(testToken)
+      const testRoomName = `test-room-${Date.now()}`
+      this.testRoom = await SkyWayRoom.FindOrCreate(this.testContext, {
+        type: "p2p",
+        name: testRoomName,
+        options: {
+          turnPolicy: "turnOnly"
+        }
+      })
+
+      this.memberA = await this.testRoom.join()
+
+      // MemberB用の別のコンテキスト
+      const testTokenB = await fetchSkyWayToken()
+      this.testContextB = await SkyWayContext.Create(testTokenB)
+      this.roomB = await SkyWayRoom.FindOrCreate(this.testContextB, {
+        type: "p2p",
+        name: testRoomName,
+        options: {
+          turnPolicy: "turnOnly" // TURN経由の通信を強制
+        }
+      })
+      this.memberB = await this.roomB.join()
       // ビデオプレビューの設定
       if (this.stream.videoStream) {
+        const videoPublication = await this.memberA.publish(
+          this.stream.videoStream
+        )
+        console.log("映像ストリームを公開:", videoPublication.id)
+        const videoSubscription = await this.memberB.subscribe(
+          videoPublication.id
+        )
+
+        // MemberBが映像をサブスクライブ
+        console.log("映像ストリームをサブスクライブ:", videoSubscription)
         const videoPreview = document.createElement("video")
         videoPreview.autoplay = true
         videoPreview.playsInline = true
@@ -140,7 +178,10 @@ export class VideoChat {
           object-fit: cover;
           border-radius: 4px;
         `
-        await this.stream.videoStream.attach(videoPreview)
+        // RemoteVideoStreamの場合のみattachメソッドを使用
+        if ("attach" in videoSubscription.stream) {
+          await videoSubscription.stream.attach(videoPreview)
+        }
         videoPreviewContainer.appendChild(videoPreview)
       } else {
         videoPreviewContainer.innerHTML = `
@@ -158,6 +199,17 @@ export class VideoChat {
 
       // オーディオプレビューの設定
       if (this.stream.audioStream) {
+        // 音声ストリームの公開
+        const audioPublication = await this.memberA.publish(
+          this.stream.audioStream
+        )
+        console.log("音声ストリームを公開:", audioPublication.id)
+
+        // MemberBが音声をサブスクライブ
+        const audioSubscription = await this.memberB.subscribe(
+          audioPublication.id
+        )
+        console.log("音声ストリームをサブスクライブ:", audioSubscription)
         const audioMeter = document.createElement("div")
         audioMeter.className = "audio-meter"
         audioMeter.innerHTML = `
@@ -188,7 +240,7 @@ export class VideoChat {
 
         // 音声レベルの可視化
         const cleanup = this.visualizeAudio(
-          this.stream.audioStream,
+          audioSubscription.stream as any,
           audioMeter.querySelector(".meter-fill")
         )
 
@@ -207,35 +259,16 @@ export class VideoChat {
           </div>
         `
       }
-
-      // テスト用のコンテキストとルームの設定
-      const testToken = await fetchSkyWayToken()
-      this.testContext = await SkyWayContext.Create(testToken)
-      const testRoomName = `test-room-${Date.now()}`
-      this.testRoom = await SkyWayRoom.FindOrCreate(this.testContext, {
-        type: "p2p",
-        name: testRoomName,
-        options: {
-          turnPolicy: "turnOnly"
-        }
-      })
-
-      this.memberA = await this.testRoom.join()
-
-      // ストリームの公開
-      if (this.stream.videoStream) {
-        await this.memberA.publish(this.stream.videoStream)
-      }
-      if (this.stream.audioStream) {
-        await this.memberA.publish(this.stream.audioStream)
-      }
     } catch (error) {
       console.error("ローカルストリームテストエラー:", error)
       this.hideLoading()
       // クリーンアップ
       if (this.memberA) await this.memberA.leave()
+      if (this.memberB) await this.memberB.leave()
       if (this.testRoom) await this.testRoom.dispose()
+      if (this.roomB) await this.roomB.dispose()
       if (this.testContext) await this.testContext.dispose()
+      if (this.testContextB) await this.testContextB.dispose()
       if (this.testContainer) this.testContainer.remove()
       throw error
     }
@@ -373,8 +406,11 @@ export class VideoChat {
     // 次へ進むボタンのイベントハンドラ
     actionsContainer?.addEventListener("click", async () => {
       if (this.memberA) await this.memberA.leave()
+      if (this.memberB) await this.memberB.leave()
       if (this.testRoom) await this.testRoom.dispose()
+      if (this.roomB) await this.roomB.dispose()
       if (this.testContext) await this.testContext.dispose()
+      if (this.testContextB) await this.testContextB.dispose()
       if (this.testContainer) this.testContainer.remove()
       // ローディングを非表示
       this.hideLoading()
