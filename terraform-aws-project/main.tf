@@ -168,3 +168,4 @@ output "public_ip" {
   value = aws_eip.nodejs_eip.public_ip
   description = "The public IP address of the Node.js server"
 } 
+  

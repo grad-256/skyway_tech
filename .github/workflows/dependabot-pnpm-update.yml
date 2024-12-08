@@ -52,6 +52,14 @@ jobs:
 
       - name: Update pnpm Lock
         run: pnpm install --lockfile-only
+
+      - name: Commit changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add pnpm-lock.yaml
+          git commit -m "chore(deps): update pnpm-lock.yaml"
+          git push
       
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
