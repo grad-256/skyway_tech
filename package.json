@@ -32,7 +32,7 @@
     "@skyway-sdk/room": "^1.10.0",
     "@skyway-sdk/sfu-bot": "^1.10.0",
     "@skyway-sdk/token": "^1.6.3",
-    "@types/node": "^22.10.1",
+    "@types/node": "^22.10.2",
     "cros": "^1.0.1",
     "crypto": "^1.0.1",
     "express": "^4.21.1",
