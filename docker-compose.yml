@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  client:
+    build:
+      context: .
+      dockerfile: ./src/Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_SKYWAY_API_KEY=${SKYWAY_API_KEY}
+      - VITE_SKYWAY_SECRET_KEY=${SKYWAY_SECRET_KEY}
+    env_file:
+      - .env
+    depends_on:
+      - server
+
+  server:
+    build:
+      context: ./server
+      dockerfile: ./Dockerfile
+    volumes:
+      - ./server:/app/server
+      - /app/server/node_modules
+    ports:
+      - "3001:3001"
+    environment:
+      - SKYWAY_API_KEY:${SKYWAY_API_KEY}
+      - SKYWAY_SECRET_KEY:${SKYWAY_SECRET_KEY}
+    env_file:
+      - .env
+
+networks:
+  default:
+    name: skyway-network 
