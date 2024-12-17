@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  client:
+    build:
+      context: .
+      dockerfile: ./src/Dockerfile.prod
+    volumes:
+      - ./src:/app/src:ro
+      - ./dist:/app/dist
+      - type: volume
+        source: node_modules
+        target: /app/node_modules
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+      - VITE_SKYWAY_API_KEY=${SKYWAY_API_KEY}
+      - VITE_SKYWAY_SECRET_KEY=${SKYWAY_SECRET_KEY}
+    env_file:
+      - .env
+    depends_on:
+      - server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.prod
+    volumes:
+      - ./server:/app/server:ro
+      - ./server/dist:/app/dist
+      - type: volume
+        source: server_node_modules
+        target: /app/node_modules
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - SKYWAY_API_KEY=${SKYWAY_API_KEY}
+      - SKYWAY_SECRET_KEY=${SKYWAY_SECRET_KEY}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  node_modules:
+  server_node_modules:
+
+networks:
+  default:
+    name: skyway-network-prod
