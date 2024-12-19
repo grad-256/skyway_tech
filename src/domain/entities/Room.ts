@@ -12,7 +12,7 @@ import {
 export class Room {
   private localMember: LocalP2PRoomMember | null = null
   private messageStream: LocalDataStream | null = null
-  private subscriptions: Map<
+  subscriptions: Map<
     string,
     {
       subscription: RoomSubscription<RemoteStream>
