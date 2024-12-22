@@ -94,13 +94,32 @@ export class VideoChat {
   private lastMetrics: NetworkQualityMetrics | null = null;
   private qualityHistory: ('good' | 'bad')[] = [];
   private readonly HISTORY_SIZE = 5;
+  private maxRetryAttempts = 3;
+  private currentRetryAttempt = 0;
+  private retryTimeout = 2000; // 2秒
+  private loadingIndicator: HTMLElement | null = null;
+  private qualityMonitoringInterval: NodeJS.Timer | null = null;
+  private qualityRecoveryTimeouts: number[] = [];
+  private messageArea: HTMLElement | null = null;
   
   constructor(
     private stream: Stream,
     private templeElement: TempleElement,
     private connectivityContainer: HTMLElement | null
-    // document.getElementById("connectivity-test-results")
-  ) {}
+  ) {
+    window.addEventListener('beforeunload', () => {
+      console.log('ページアンロードによるクリーンアップを実行します');
+      this.dispose();
+    });
+
+    // ESCキーでの退室処理
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        console.log('ESCキーによる退室処理を実行します');
+        this.dispose();
+      }
+    });
+  }
 
   private showLoading(message: string = "接続テスト中...") {
     const overlay = document.getElementById("loading-overlay")
@@ -131,7 +150,6 @@ export class VideoChat {
       const connectivityTest = new SkyWayConnectivityTest(this.context)
       const testResult = await connectivityTest.runConnectivityTest()
       this.lastConnectionTest = testResult
-
       // テスト結果の表示を更新
       this.updateTestResults(testResult)
 
@@ -168,10 +186,18 @@ export class VideoChat {
     }
   }
 
-  private async testLocalStream(): Promise<void> {
-    if (this.hasCompletedInitialTest) return
+  private async testLocalStream(autoRetry: boolean = true, noneTestCompleted: boolean | undefined = undefined): Promise<void> {
+    if (noneTestCompleted === false) {
+      this.hasCompletedInitialTest = false
+    } else if (noneTestCompleted === true) {
+      return
+    }
 
+    if (this.hasCompletedInitialTest) return
+    
     try {
+      this.hasCompletedInitialTest = false
+      await this.cleanupTestResources();
       this.showLoading("ローカルストリームをテスト中...")
 
       // テスト用のコンテナを作成
@@ -186,7 +212,7 @@ export class VideoChat {
         )
 
       if (!videoPreviewContainer || !audioPreviewContainer) {
-        throw new Error("プレビューコンテナが見つかりませ��")
+        throw new Error("プレビューコンテナが見つかりません")
       }
 
       // テスト用のコンテキストとルームの設定
@@ -224,7 +250,7 @@ export class VideoChat {
       this.memberB = await this.roomB.join()
       // ビデオプレビューの設定
       if (videoPublication) {
-        console.log("��像ストリームを公開:", videoPublication.id)
+        console.log("映像ストリームを公開:", videoPublication.id)
         const videoSubscription = await this.memberB.subscribe(
           videoPublication.id
         )
@@ -262,7 +288,7 @@ export class VideoChat {
 
       // オーディオプレビューの設定
       if (this.stream.audioStream) {
-        // 音��ストリームの公開
+        // 音声ストリームの公開
         const audioPublication = await this.memberA.publish(
           this.stream.audioStream
         )
@@ -301,7 +327,7 @@ export class VideoChat {
         `
         audioPreviewContainer.appendChild(audioMeter)
 
-        // 音��レベルの可視化
+        // 音声レベルの可視化
         const cleanup = this.visualizeAudio(
           audioSubscription.stream as any,
           audioMeter.querySelector(".meter-fill")
@@ -322,18 +348,62 @@ export class VideoChat {
           </div>
         `
       }
+      this.hasCompletedInitialTest = true
     } catch (error) {
       console.error("ローカルストリームテストエラー:", error)
       this.hideLoading()
+      this.hasCompletedInitialTest = false
+      await this.cleanupTestResources();
       // クリーンアップ
-      if (this.memberA) await this.memberA.leave()
-      if (this.memberB) await this.memberB.leave()
-      if (this.testRoom) await this.testRoom.dispose()
-      if (this.roomB) await this.roomB.dispose()
-      if (this.testContext) await this.testContext.dispose()
-      if (this.testContextB) await this.testContextB.dispose()
-      if (this.testContainer) this.testContainer.remove()
-      throw error
+      if (autoRetry && this.currentRetryAttempt < this.maxRetryAttempts) {
+        this.showRetryDialog();
+        // 自動再接続
+        // this.currentRetryAttempt++;
+        // console.log(`自動再接続を試みます (${this.currentRetryAttempt}/${this.maxRetryAttempts})`);
+        
+        // await new Promise(resolve => setTimeout(resolve, this.retryTimeout));
+        // return this.testLocalStream(true);
+      } else {
+        // 手動再接続のUIを表示
+        this.showRetryDialog();
+      }
+      
+    }
+  }
+
+  // クリーンアップ処理を別メソッドに切り出し
+  private async cleanupTestResources(): Promise<void> {
+    try {
+      if (this.memberA) {
+        await this.memberA.leave();
+        this.memberA = null;
+      }
+      if (this.memberB) {
+        await this.memberB.leave();
+        this.memberB = null;
+      }
+      if (this.testRoom) {
+        await this.testRoom.dispose();
+        this.testRoom = null;
+      }
+      if (this.roomB) {
+        await this.roomB.dispose();
+        this.roomB = null;
+      }
+      if (this.testContext) {
+        await this.testContext.dispose();
+        this.testContext = null;
+      }
+      if (this.testContextB) {
+        await this.testContextB.dispose();
+        this.testContextB = null;
+      }
+      if (this.testContainer) {
+        this.testContainer.remove();
+        this.testContainer = null;
+      }
+    } catch (cleanupError) {
+      console.error("クリーンアップ中にエラーが発生:", cleanupError);
     }
   }
 
@@ -484,6 +554,51 @@ export class VideoChat {
     return container
   }
 
+  // 手動再接続用のダイアログを表示
+private showRetryDialog(): void {
+  const dialogContainer = document.createElement('div');
+  dialogContainer.className = 'retry-dialog';
+  dialogContainer.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.95);
+    padding: 20px;
+    border-radius: 8px;
+    z-index: 1000;
+    color: white;
+    text-align: center;
+  `;
+
+  dialogContainer.innerHTML = `
+    <h3 style="margin: 0 0 10px 0;">接続エラー</h3>
+    <p style="margin: 0 0 20px 0;">ローカルストリームのテストに失敗しました</p>
+    <button class="retry-button" style="
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    ">
+      再試行
+    </button>
+  `;
+
+  document.body.appendChild(dialogContainer);
+
+  // イベントリスナーの設定
+  const retryButton = dialogContainer.querySelector('.retry-button');
+  retryButton?.addEventListener('click', async () => {
+    dialogContainer.remove();
+    this.currentRetryAttempt = 0; // リトライカウントをリセット
+    await this.testLocalStream(false, false); // 手動再試行
+  });
+}
+
+
   async initialize() {
     try {
       const token = await fetchSkyWayToken()
@@ -496,7 +611,7 @@ export class VideoChat {
       }
 
       // ローカルストリームのテスト
-      await this.testLocalStream()
+      await this.testLocalStream(true)
       this.hasCompletedInitialTest = true
 
       console.log("接続テスト結果:", this.lastConnectionTest)
@@ -595,47 +710,80 @@ export class VideoChat {
       const localMemberId = this.room?.getLocalMember()?.id
       const publisherId = publication.publisher.id
 
+      // 自分のストリームはスキップ
+      if (publisherId === localMemberId) {
+        console.log("自分のストリームなのでスキップします");
+        return;
+      }
+
+      console.log("新規配信を処理:", {
+        contentType: publication.contentType,
+        publisherId,
+        isLocal: publisherId === localMemberId
+      });
+
       // データストリームは無視（Room クラスで処理される）
       if (publication.contentType === "data") {
+        console.log("データストリームは別途処理されます");
         return
       }
 
-      // 自分の公開したストリームは購読しない
-      if (publisherId === localMemberId) {
-        console.log("自分のストリームなのでスキップします")
-        return
-      }
-
-      console.log("メディアストリームを購読します:", {
+      console.log(`${publication.contentType}ストリームを購読開始:`, {
         publicationId: publication.id,
         publisherId: publication.publisher.id,
         contentType: publication.contentType
       })
 
       const subscription = await this.room?.subscribeStream(publication.id)
-      if (subscription) {
-        if (publication.contentType === 'video') {
-          console.log('接続前の状態:', subscription.subscription.state);
-        
-          subscription.subscription.onConnectionStateChanged.add(state => {
-            console.log('[イベント発火] 接続状態変更:', {
-              oldState: subscription.subscription.getConnectionState(),
-              newState: state,
-              timestamp: new Date().toISOString()
-            });
-          });
-  
-          // ストリーム接続前の状態をログ
-          console.log('ストリーム接続前:', subscription.subscription.state);
-          
-          await this.attachStreamToUI(subscription.stream, publication);
-          
-          // ストリーム接続後の状態をログ
-          console.log('ストリーム接続後:', subscription.subscription.state);
+      if (!subscription) {
+        console.error("音声ストリームの購読に失敗");
+        return;
       }
-    }
+
+      // ストリーム接続前の状態をロ��
+      console.log('ストリーム接続前:', subscription.subscription.state);
+      if (publication.contentType === 'audio') {
+        console.log("音声ストリームのUI処理を開始");
+        const audioElement = await this.attachStreamToUI(subscription.stream, publication);
+        
+        // 音量メーターの追加（必要な場合）
+        this.setupAudioMeter(subscription.stream, audioElement);
+      }
+      if (publication.contentType === 'video') {
+        console.log('接続前の状態:', subscription.subscription.state);
+        subscription.subscription.onConnectionStateChanged.add(state => {
+          console.log('[イベント発火] 接続状態変更:', {
+            oldState: subscription.subscription.getConnectionState(),
+            newState: state,
+            timestamp: new Date().toISOString()
+          });
+
+          // 状態に応じたユーザー通知と対応
+          this.handleConnectionStateChange(state);
+        });
+        await this.attachStreamToUI(subscription.stream, publication);
+      }
+      // ストリーム接続後の状態をログ
+      console.log('ストリーム接続後:', subscription.subscription.state);
     } catch (error) {
       console.error("ストリーム購読エラー:", error)
+    }
+  }
+
+  // 音量メーターのセットアップ（オプション）
+  private setupAudioMeter(stream: any, audioElement: HTMLAudioElement | null) {
+    if (!audioElement) return;
+    try {
+      audioElement.muted = false;
+
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(new MediaStream([stream.track]));
+      const analyser = audioContext.createAnalyser();
+      source.connect(analyser);
+      
+      // 音量の可視化処理を追加する場合はここに実装
+    } catch (error) {
+      console.error("音量メーターのセットアップエラー:", error);
     }
   }
 
@@ -652,7 +800,7 @@ export class VideoChat {
       "パンダ",
       "キリン",
       "ライオン",
-      "ペンギン",
+      "ペンギルー",
       "カンガルー",
       "コアラ"
     ]
@@ -665,10 +813,23 @@ export class VideoChat {
   }
 
   private async attachStreamToUI(stream: any, publication: any) {
+    const localMemberId = this.room?.getLocalMember()?.id;
+    if (publication.publisher.id === localMemberId && publication.contentType === 'audio') {
+      console.log("自分の音声ストリームなのでUIをスキップします");
+      return;
+    }
+
     console.log("Attaching stream to UI:", {
-      kind: stream.track.kind,
-      publisherId: publication.publisher.id,
-      publisherName: publication.publisher.name
+      streamType: typeof stream,
+      trackExists: !!stream.track,
+      trackType: typeof stream.track,
+      kind: stream.track?.kind,
+      contentType: publication.contentType,  // SkyWayのcontentTypeも確認
+      publication: {
+        id: publication.id,
+        publisherId: publication.publisher.id,
+        contentType: publication.contentType
+      }
     })
 
     // テスト用のストリームは無視する
@@ -686,8 +847,10 @@ export class VideoChat {
 
     await stream.attach(mediaElement)
 
+    console.log("attachStreamToUI", publication.contentType)
+    console.log("mediaElement", mediaElement)
     // audio要素の場合は特別な配置を行う
-    if (stream.track.kind === "audio") {
+    if (publication.contentType === 'audio') {
       // remote-audio-containerが存在しない場合は作成
       let audioContainer = document.getElementById("remote-audio-container")
       if (!audioContainer) {
@@ -721,7 +884,7 @@ export class VideoChat {
       const isLocal =
         publication.publisher.id === this.room?.getLocalMember()?.id
 
-      // IDと名前をみ合わせて表��
+      // IDと名前をみ合わせて表示
       const displayName = isLocal
         ? `${randomName}（自分）- ${publication.publisher.id}`
         : `${randomName} - ${publication.publisher.id}`
@@ -739,7 +902,7 @@ export class VideoChat {
 
       audioContainer.appendChild(audioWrapper)
       console.log("Audio element added to container")
-    } else {
+    } else if (publication.contentType === "video") {
       this.templeElement.remoteMediaArea.appendChild(mediaElement)
     }
   }
@@ -875,7 +1038,7 @@ export class VideoChat {
         statusMessage.textContent = "接続テスト実行中..."
       }
 
-      // テスト用のルームを作���しストリームをテスト
+      // テスト用の���ームを作成しストリームをテスト
       await this.testLocalStream()
 
       // 接続状態のチェック
@@ -897,11 +1060,17 @@ export class VideoChat {
 
   // joinRoom メソッドを更新
   async joinRoom() {
-    if (!this.room) {
-      await this.createRoom()
-    }
-
     try {
+      if (this.room) {
+        console.log('再参加のため、既存のルームをクリーンアップします');
+        await this.leaveRoom();
+      }
+      
+      await this.createRoom()
+
+      if (!this.room) {
+        throw new Error("ルームの作成に失敗しました");
+      }
       // 接続テストモーダルを表示
       const canProceed = await this.showConnectivityTestModal()
       if (!canProceed) {
@@ -936,27 +1105,105 @@ export class VideoChat {
       // 自分のストリームを公開
       console.log("自分のストリームを公開します")
       if (this.stream.audioStream) {
-        await this.room?.publishStream(this.stream.audioStream)
+        console.log("音声ストリームを公開します", {
+          trackEnabled: this.stream.audioStream.track.enabled,
+          trackMuted: this.stream.audioStream.track.muted
+        });
+        const audioPublication = await this.room?.publishStream(this.stream.audioStream);
+        console.log("音声ストリーム公開完了:", {
+          publicationId: audioPublication?.id,
+          publisherId: this.room?.getLocalMember()?.id
+        });
+  
+        // 自分の音声のUIも表示
+        // await this.attachStreamToUI(this.stream.audioStream, {
+        //   contentType: 'audio',
+        //   publisher: {
+        //     id: this.room?.getLocalMember()?.id,
+        //     name: 'local'
+        //   },
+        //   id: audioPublication?.id
+        // });
       }
       if (this.stream.videoStream) {
-        await this.room?.publishStream(this.stream.videoStream)
+        console.log("ビデオストリームを公開します");
+        const videoPublication = await this.room?.publishStream(this.stream.videoStream);
+        console.log("ビデオストリーム公開完了:", videoPublication?.id);
       }
 
       // 既存のリモートストリームを購読
       const publications = this.room?.getRemotePublications() || []
+      console.log("既存のリモート配信を確認:", {
+        count: publications.length,
+        types: publications.map(p => p.contentType)
+      });
+
       for (const publication of publications) {
-        await this.handleNewPublication(publication)
+        console.log("配信タイプを確認:", publication.contentType);
+        if (publication.contentType === 'audio' || publication.contentType === 'video') {
+          await this.handleNewPublication(publication);
+        }
       }
+
+      this.room?.events.onStreamPublished?.add(async (e) => {
+        console.log("新規ストリーム公開を検知:", {
+          contentType: e.publication.contentType,
+          publisherId: e.publication.publisher.id
+        });
+        await this.handleNewPublication(e.publication);
+      });
+      // 品質モニタリングを開始（確実に最後に実行）
+      console.log('ルーム参加後に品質モニタリングを開始します');
+      this.ensureQualityMonitoring();
     } catch (error) {
       console.error("ルーム参加エラー:", error)
       throw error
     }
   }
 
+  // 新しく追加: 品質モニタリングの確実な開始を保証
+private async ensureQualityMonitoring() {
+  // 一度停止して確実に再開始
+  this.stopQualityMonitoring();
+  
+  // 少し待機して、他の処理が完了するのを待つ
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
+  if (!this.qualityMonitoringInterval) {
+    this.startQualityMonitoring();
+    
+    // モニタリングが開始されたか確認
+    if (!this.qualityMonitoringInterval) {
+      console.error('品質モニタリングの開始に失敗しました');
+    } else {
+      console.log('品質モニタリングが正常に開始されました');
+    }
+  }
+}
+
   async leaveRoom() {
     try {
-      await this.room?.leave()
+      console.log('退室処理を開始します');
+      
+      // 品質モニタリングを停止
+      this.stopQualityMonitoring();
+       // 品質回復タイマーをクリア
+      this.clearQualityRecoveryTimeouts();
+      if (this.room) {
+        await this.room.leave();
+        this.room = undefined;
+        console.log('ルームから正常に退室しました');
+      }
       this.cleanupUI()
+
+            // 状態をリセット
+      this.lastMetrics = null;
+      this.qualityHistory = [];
+      this.currentRetryAttempt = 0;
+      console.log('退室処理が完了しました。Room状態:', {
+        hasRoom: !!this.room,
+        subscriptions: this.room
+      });
     } catch (error) {
       console.error("退室エラー:", error)
       throw error
@@ -964,22 +1211,38 @@ export class VideoChat {
   }
 
   private cleanupUI() {
+      // メッセージ履歴をクリア
+    if (this.messageArea) {
+      this.messageArea.innerHTML = '';
+    }
+
+    // リモートメディアエリアをクリア
     if (this.templeElement.remoteMediaArea) {
       this.templeElement.remoteMediaArea.innerHTML = ""
     }
+
+    // 自分のIDをクリア
     if (this.templeElement.myId) {
       this.templeElement.myId.textContent = ""
     }
+
+    // リモート音声エリアをクリア
     const audioContainer = document.getElementById("remote-audio-container")
     if (audioContainer) {
       audioContainer.innerHTML = ""
+    }
+
+    // リモート映像エリアをクリア
+    const videoContainer = document.getElementById("remote-video-container")
+    if (videoContainer) {
+      videoContainer.innerHTML = ""
     }
   }
 
   // メッセージ表示関数
   private appendMessage(sender: string, content: string) {
-    const messageArea = document.getElementById("message-area")
-    if (!messageArea) return
+    this.messageArea = document.getElementById("message-area")
+    if (!this.messageArea) return
 
     const messageDiv = document.createElement("div")
     messageDiv.className = "message"
@@ -991,8 +1254,8 @@ export class VideoChat {
       <div class="content">${this.escapeHtml(content)}</div>
     `
 
-    messageArea.appendChild(messageDiv)
-    messageArea.scrollTop = messageArea.scrollHeight
+    this.messageArea.appendChild(messageDiv)
+    this.messageArea.scrollTop = this.messageArea.scrollHeight
   }
 
   // XSS対策用のエスケープ関数
@@ -1106,7 +1369,7 @@ export class VideoChat {
       modalContainer.querySelector<HTMLElement>(".status-message")
 
     if (!statusIndicator || !statusMessage) {
-      console.warn("ステータス表示要素が見つかりません")
+      console.warn("ステータス表示要素が見つかりま��ん")
       return
     }
 
@@ -1213,20 +1476,40 @@ export class VideoChat {
           min: initialQuality.minFrameRate 
         }
       });
-
-      // 品質モニタリングの開始
-      this.startQualityMonitoring();
-
     } catch (error) {
       console.error('ビデオ品質の初期設定に失敗:', error);
     }
   }
 
   private startQualityMonitoring() {
-    if (!this.stream.videoStream) return;
+    this.stopQualityMonitoring();
 
-    const monitor = setInterval(async () => {
+    if (!this.stream.videoStream) {
+      console.warn('ビデオストリームが存在しないため、品質モニタリングを開始できません');
+      return;
+    }
+
+    console.log('品質モニタリングを開始します');
+
+      // 初期状態の確認
+    console.log('初期状態:', {
+      room: !!this.room,
+      subscriptions: this.room ? Array.from(this.room.subscriptions.values()) : [],
+      videoStream: !!this.stream.videoStream,
+      videoTrack: !!this.stream.videoStream?.track
+    });
+    
+    const intervalId = window.setInterval(async () => {
       try {
+        if (!this.stream.videoStream?.track || !this.room) {
+          console.warn('必要なリソースが存在しないため、モニタリングを停止します', {
+            hasVideoTrack: !!this.stream.videoStream?.track,
+            hasRoom: !!this.room
+          });
+          this.stopQualityMonitoring();
+          return;
+        }
+
         const settings = this.stream.videoStream?.track?.getSettings();
         const currentQuality = {
           width: settings?.width,
@@ -1234,8 +1517,18 @@ export class VideoChat {
           frameRate: settings?.frameRate
         };
 
+        // 現在の品質をログ出力
+        // メトリクス取得前の状態確認
+        console.log('メトリクス取得前の状態:', {
+          subscriptionsCount: this.room.subscriptions.size,
+          currentQuality
+        });
+
         // ネットワーク品質メトリクスの取得
         const metrics = await this.getNetworkMetrics();
+        console.log({metrics});
+        console.log(this.connectivityContainer);
+        
         if (metrics && this.connectivityContainer) {
           this.updateTestResultItem(
             this.connectivityContainer,
@@ -1261,7 +1554,7 @@ export class VideoChat {
           const qualityStatus = this.analyzeNetworkQuality(metrics);
           this.updateQualityHistory(qualityStatus);
           
-          console.log('現在の品質状態:', {
+          console.log('現在の品質態:', {
             currentQuality,
             networkMetrics: metrics,
             qualityStatus,
@@ -1289,26 +1582,59 @@ export class VideoChat {
       } catch (error) {
         console.error('品質モニタリングエラー:', error);
       }
-    }, 5000); // 5秒ごとにモニタリング
+    }, 5000) as unknown as NodeJS.Timeout; // 5秒ごとにモニタリング
 
-    return () => clearInterval(monitor);
+    this.qualityMonitoringInterval = intervalId;
+    console.log('品質モニタリングのインターバルID:', this.qualityMonitoringInterval);
+  }
+
+  private stopQualityMonitoring() {
+    if (this.qualityMonitoringInterval) {
+      console.log('品質モニタリングを停止します');
+      window.clearInterval(this.qualityMonitoringInterval as NodeJS.Timeout);
+      this.qualityMonitoringInterval = null;
+    }
   }
 
   private async getNetworkMetrics(): Promise<NetworkQualityMetrics | null> {
     try {
+      if (!this.room) {
+        console.warn('ルームが存在しないため、メトリクスを取得できません');
+        return null;
+      }
+
       const subscriptions = Array.from(this.room?.subscriptions.values() || []);
+      console.log('現在のサブスクリプション:', subscriptions);
+
       const videoSubscription = subscriptions.find(
         sub => sub.subscription.contentType === 'video'
       );
       
-      if (!videoSubscription) return null;
+      if (!videoSubscription) {
+        console.warn('ビデオサブスクリプションが見つかりません');
+        return null;
+      }
 
       const stats = await videoSubscription.subscription.getStats();
+      console.log('取得したStats:', stats);
+
+      if (!stats || stats.length === 0) {
+        console.warn('統計情報が取得できません');
+        return null;
+      }
+
       const videoStats = stats.find(stat => stat.type === 'inbound-rtp' && stat.kind === 'video');
       const candidatePair = stats.find(stat => stat.type === 'candidate-pair' && stat.nominated);
       const transport = stats.find(stat => stat.type === 'transport');
 
-      if (!videoStats || !candidatePair || !transport) return null;
+      if (!videoStats || !candidatePair || !transport) {
+        console.warn('必要な統計情報が不足しています:', {
+          hasVideoStats: !!videoStats,
+          hasCandidatePair: !!candidatePair,
+          hasTransport: !!transport
+        });
+        return null;
+      }
 
       return {
         // 基本メトリクス
@@ -1348,7 +1674,7 @@ export class VideoChat {
       ((metrics.packetsLost - this.lastMetrics.packetsLost) / 
       (totalPackets - lastTotalPackets)) * 100;
 
-    // ス��ープットの計算 (bps)
+    // スループットの計算 (bps)
     const throughput = 
       ((metrics.bytesReceived - this.lastMetrics.bytesReceived) * 8) / timeDiff;
 
@@ -1422,6 +1748,8 @@ export class VideoChat {
     if (!this.stream.videoStream?.track) return;
 
     try {
+      // 既存のタイマーをクリア
+      this.clearQualityRecoveryTimeouts();
       // 一度低品質に落として、徐々に回復を試みる
       await this.stream.videoStream.track.applyConstraints({
         width: { ideal: QUALITY_PRESETS.low.width },
@@ -1430,7 +1758,7 @@ export class VideoChat {
       });
 
       // 30秒後に中品質への回復を試みる
-      setTimeout(async () => {
+      const mediumQualityTimeout = window.setTimeout(async () => {
         try {
           await this.stream.videoStream?.track?.applyConstraints({
             width: { ideal: QUALITY_PRESETS.medium.width },
@@ -1439,7 +1767,7 @@ export class VideoChat {
           });
 
           // さらに30秒後に高品質への回復を試みる
-          setTimeout(async () => {
+          const highQualityTimeout = window.setTimeout(async () => {
             try {
               const settings = this.stream.videoStream?.track?.getSettings();
               const currentQuality = {
@@ -1457,21 +1785,33 @@ export class VideoChat {
                   height: { ideal: QUALITY_PRESETS.high.height },
                   frameRate: { ideal: QUALITY_PRESETS.high.frameRate }
                 });
-                console.log('高品質に引き上げまし��');
+                console.log('高品質に引き上げました');
               }
             } catch (error) {
               console.error('高品質への引き上げに失敗:', error);
             }
           }, 30000); // さらに30秒後
 
+          this.qualityRecoveryTimeouts.push(highQualityTimeout);
+
         } catch (error) {
           console.error('中品質への回復に失敗:', error);
         }
       }, 30000); // 30秒後
 
+      this.qualityRecoveryTimeouts.push(mediumQualityTimeout);
+
     } catch (error) {
       console.error('品質調整に失敗:', error);
     }
+  }
+
+  // タイマーをクリアするメソッドを追加
+  private clearQualityRecoveryTimeouts() {
+    this.qualityRecoveryTimeouts.forEach(timeoutId => {
+      window.clearTimeout(timeoutId);
+    });
+    this.qualityRecoveryTimeouts = [];
   }
 
   // 高品質への引き上げを試みるメソッドを追加
@@ -1500,7 +1840,7 @@ export class VideoChat {
       console.log('高品質に引き上げました');
       
     } catch (error) {
-      console.error('高品���への引き上げに失敗:', error);
+      console.error('高品質への引き上げに失敗:', error);
     }
   }
 
@@ -1558,5 +1898,165 @@ export class VideoChat {
   
   private getConnectionStatusClass(state: string): 'success' | 'warning' | 'error' {
     return state.includes('connected') ? 'success' : 'warning';
+  }
+
+  private handleConnectionStateChange(state: string) {
+    // 状態に応じたメッセージとアクション
+    const stateActions: Record<string, { 
+      message: string, 
+      type: 'info' | 'warning' | 'error',
+      action: () => void 
+    }> = {
+      'connecting': {
+        message: '接続を確立しています...',
+        type: 'info',
+        action: () => this.showLoadingIndicator()
+      },
+      'connected': {
+        message: '接続が確立されました',
+        type: 'info',
+        action: () => {
+          this.hideLoadingIndicator();
+          this.ensureQualityMonitoring(); // 接続確立後に品質モニタリングを開始
+        }
+      },
+      'disconnected': {
+        message: '接続が切断されました。再接続を試みます...',
+        type: 'warning',
+        action: () => this.attemptReconnection()
+      },
+      'failed': {
+        message: '接続に失敗しました。ネットワーク環境をご確認ください',
+        type: 'error',
+        action: () => this.handleConnectionFailure()
+      }
+    };
+
+    const stateInfo = stateActions[state] || {
+      message: `接続状態が変更されました: ${state}`,
+      type: 'info',
+      action: () => {}
+    };
+
+    // ユーザーへの通知
+    this.showNotification(stateInfo.message, stateInfo.type);
+    
+    // 対応するアクションの実行
+    stateInfo.action();
+  }
+
+  private showNotification(message: string, type: 'info' | 'warning' | 'error') {
+    const notificationElement = document.createElement('div');
+    notificationElement.className = `connection-notification ${type}`;
+    notificationElement.textContent = message;
+
+    // スタイル設定
+    Object.assign(notificationElement.style, {
+      position: 'fixed',
+      top: '20px',
+      right: '20px',
+      padding: '12px 20px',
+      borderRadius: '4px',
+      zIndex: '1000',
+      animation: 'fadeInOut 4s ease-in-out',
+      backgroundColor: type === 'error' ? 'rgba(244, 67, 54, 0.9)' :
+                      type === 'warning' ? 'rgba(255, 193, 7, 0.9)' :
+                      'rgba(33, 150, 243, 0.9)',
+      color: '#fff'
+    });
+
+    document.body.appendChild(notificationElement);
+    setTimeout(() => notificationElement.remove(), 4000);
+  }
+
+  private async attemptReconnection(retryCount = 0, maxRetries = 3) {
+    if (retryCount >= maxRetries) {
+      this.showNotification('再接続に失敗しました。ページを更新してください。', 'error');
+      return;
+    }
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1))); // 指数バックオフ
+      // 再接続ロジックの実装
+      // ...
+
+    } catch (error) {
+      console.error('再接続失敗:', error);
+      await this.attemptReconnection(retryCount + 1, maxRetries);
+    }
+  }
+
+  private handleConnectionFailure() {
+    // 接続失敗時の処理
+    this.cleanupTestResources();
+    this.showRetryDialog();
+  }
+
+  private showLoadingIndicator() {
+    if (this.loadingIndicator) return;
+
+    this.loadingIndicator = document.createElement('div');
+    this.loadingIndicator.className = 'loading-indicator';
+    
+    Object.assign(this.loadingIndicator.style, {
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      background: 'rgba(0, 0, 0, 0.7)',
+      padding: '20px',
+      borderRadius: '8px',
+      color: 'white',
+      zIndex: '1000',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '10px'
+    });
+
+    this.loadingIndicator.innerHTML = `
+      <div class="spinner" style="
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      "></div>
+      <div>接続中...</div>
+    `;
+
+    // スピナーのアニメーションスタイルを追加
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    document.body.appendChild(this.loadingIndicator);
+  }
+
+  private hideLoadingIndicator() {
+    if (this.loadingIndicator) {
+      this.loadingIndicator.remove();
+      this.loadingIndicator = null;
+    }
+  }
+
+  // コンポーネントの破棄時にも確実にクリーンアップ
+  public dispose() {
+    console.log('VideoChat インスタンスの破棄を開始します');
+
+    // イベントリスナーの削除
+    window.removeEventListener('beforeunload', this.dispose);
+    document.removeEventListener('keydown', this.dispose);
+    this.clearQualityRecoveryTimeouts();
+    this.stopQualityMonitoring();
+    this.leaveRoom();
+
+    console.log('VideoChat インスタンスの破棄が完了しました');
   }
 }
