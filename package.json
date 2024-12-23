@@ -16,7 +16,6 @@
     "type-check": "tsc",
     "generate": "tsc --noEmit",
     "format": "prettier --write ./src",
-    "format:fix": "prettier --write --fix ./src",
     "terraform:init": "cd terraform-aws-project && terraform init",
     "terraform:apply": "cd terraform-aws-project && terraform apply",
     "terraform:destroy": "cd terraform-aws-project && terraform destroy",
