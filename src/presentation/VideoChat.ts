@@ -490,7 +490,7 @@ export class VideoChat {
       this.context = await SkyWayContext.Create(token)
 
       // 接続状態チェック
-      const status = await this.checkConnectionStatus()      
+      const status = await this.checkConnectionStatus()
       if (!status.isReady) {
         throw new Error(status.message)
       }
