@@ -14,8 +14,6 @@ window.addEventListener("load", async () => {
 
     // 初期化
     await videoChat.initialize()
-    console.log("VideoChat initialized")
-
     // イベントリスナーの設定
     const joinButton = document.getElementById("join") as HTMLButtonElement
     joinButton?.addEventListener(
