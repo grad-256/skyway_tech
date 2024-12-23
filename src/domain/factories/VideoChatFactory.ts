@@ -7,6 +7,7 @@ export abstract class VideoChatFactory {
   abstract createTempleElement(): TempleElement
   abstract createVideoChat(
     stream: Stream,
-    templeElement: TempleElement
+    templeElement: TempleElement,
+    connectivityContainer: HTMLElement | null
   ): VideoChat
 }

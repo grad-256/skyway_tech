@@ -9,12 +9,11 @@ window.addEventListener("load", async () => {
     await stream.initialize() // メディアストリームの初期化
 
     const templeElement = new TempleElement()
-    const videoChat = new VideoChat(stream, templeElement)
+    const connectivityContainer = document.getElementById("connectivity-test-results")
+    const videoChat = new VideoChat(stream, templeElement, connectivityContainer)
 
     // 初期化
     await videoChat.initialize()
-    console.log("VideoChat initialized")
-
     // イベントリスナーの設定
     const joinButton = document.getElementById("join") as HTMLButtonElement
     joinButton?.addEventListener(
