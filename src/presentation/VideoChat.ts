@@ -119,7 +119,7 @@ export class VideoChat {
         this.dispose();
       }
     });
-  }) {}
+  }
 
   private showLoading(message: string = "接続テスト中...") {
     const overlay = document.getElementById("loading-overlay")
@@ -356,13 +356,12 @@ export class VideoChat {
       await this.cleanupTestResources();
       // クリーンアップ
       if (autoRetry && this.currentRetryAttempt < this.maxRetryAttempts) {
-        this.showRetryDialog();
         // 自動再接続
-        // this.currentRetryAttempt++;
-        // console.log(`自動再接続を試みます (${this.currentRetryAttempt}/${this.maxRetryAttempts})`);
+        this.currentRetryAttempt++;
+        console.log(`自動再接続を試みます (${this.currentRetryAttempt}/${this.maxRetryAttempts})`);
         
-        // await new Promise(resolve => setTimeout(resolve, this.retryTimeout));
-        // return this.testLocalStream(true);
+        await new Promise(resolve => setTimeout(resolve, this.retryTimeout));
+        return this.testLocalStream(true);
       } else {
         // 手動再接続のUIを表示
         this.showRetryDialog();
@@ -744,10 +743,10 @@ private showRetryDialog(): void {
       console.log('ストリーム接続前:', subscription.subscription.state);
       if (publication.contentType === 'audio') {
         console.log("音声ストリームのUI処理を開始");
-        const audioElement = await this.attachStreamToUI(subscription.stream, publication);
+        await this.attachStreamToUI(subscription.stream, publication);
         
         // 音量メーターの追加（必要な場合）
-        this.setupAudioMeter(subscription.stream, audioElement);
+        this.setupAudioMeter(subscription.stream);
       }
       if (publication.contentType === 'video') {
         console.log('接続前の状態:', subscription.subscription.state);
@@ -771,11 +770,8 @@ private showRetryDialog(): void {
   }
 
   // 音量メーターのセットアップ（オプション）
-  private setupAudioMeter(stream: any, audioElement: HTMLAudioElement | null) {
-    if (!audioElement) return;
+  private setupAudioMeter(stream: any) {
     try {
-      audioElement.muted = false;
-
       const audioContext = new AudioContext();
       const source = audioContext.createMediaStreamSource(new MediaStream([stream.track]));
       const analyser = audioContext.createAnalyser();
