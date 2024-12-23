@@ -3,7 +3,7 @@ import { VideoChat } from "../../presentation/VideoChat"
 import { Stream } from "../entities/Stream"
 import { VideoChatFactory } from "./VideoChatFactory"
 
-export class ConcreteVideoChatFactory implements VideoChatFactory {
+export class ConcreteVideoChatFactory extends VideoChatFactory {
   createStream(): Stream {
     return new Stream()
   }
