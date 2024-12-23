@@ -12,7 +12,7 @@ export class ConcreteVideoChatFactory extends VideoChatFactory {
     return new TempleElement()
   }
 
-  createVideoChat(stream: Stream, templeElement: TempleElement): VideoChat {
-    return new VideoChat(stream, templeElement)
+  createVideoChat(stream: Stream, templeElement: TempleElement, connectivityContainer: HTMLElement | null): VideoChat {
+    return new VideoChat(stream, templeElement, connectivityContainer)
   }
 }

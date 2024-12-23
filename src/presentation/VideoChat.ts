@@ -99,7 +99,6 @@ export class VideoChat {
     private stream: Stream,
     private templeElement: TempleElement,
     private connectivityContainer: HTMLElement | null
-    // document.getElementById("connectivity-test-results")
   ) {}
 
   private showLoading(message: string = "接続テスト中...") {
