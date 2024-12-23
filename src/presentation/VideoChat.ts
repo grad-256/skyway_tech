@@ -119,7 +119,7 @@ export class VideoChat {
         this.dispose();
       }
     });
-  }
+  }) {}
 
   private showLoading(message: string = "接続テスト中...") {
     const overlay = document.getElementById("loading-overlay")
